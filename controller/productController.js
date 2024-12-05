@@ -10,7 +10,7 @@ const product = require("../models/products/product");
 exports.getProducts = async (req, res, next) => {
   try {
     const {page} = req.params || 1; // Default to page 1
-    const limit = parseInt(req.query.limit) || 4; // Default to 50 products per page
+    const limit = parseInt(req.query.limit) || 50; // Default to 50 products per page
     const skip = (page - 1) * limit; // Calculate the number of items to skip
 
     const products = await Product.find().skip(skip).limit(limit);
