@@ -1,6 +1,8 @@
 const Order = require("../../models/orders/orders");
 const dateFns = require("date-fns");
 const Cart = require("../../models/orders/cart");
+const Product = require("../../models/products/product");
+const Address = require("../../models/users/addressSchema");
 
 exports.createOrder = async (req, res, next) => {
   try {
@@ -20,6 +22,7 @@ exports.createOrder = async (req, res, next) => {
         paymentMode,
         orderAmount,
         addressId,
+        vendorId,
       } = orderData;
       const order = new Order({
         productId,
@@ -30,6 +33,7 @@ exports.createOrder = async (req, res, next) => {
         addressId,
         orderAmount,
         date: istDate,
+        vendorId,
       });
       await order.save();
       return order;
@@ -132,21 +136,36 @@ exports.deleteOrder = async (req, res, next) => {
   }
 };
 
+
 exports.getOrder = async (req, res, next) => {
   const { id } = req.params;
-  console.log("id is ", id);
   try {
-    const order = await Order.find({ userId: id });
-    if (order) {
-      res.status(200).json(order);
-    } else {
-      res.status(404).json({ message: "Orders not found" });
+    const orders = await Order.find({ userId: id }); // Fetch all orders for the user
+
+    if (orders.length === 0) {
+      return res.status(404).json({ message: "Orders not found" });
     }
+
+    const detailedOrders = await Promise.all(
+      orders.map(async (order) => {
+        const product = await Product.findById(order.productId);
+        const address = await Address.findById(order.addressId);
+
+        return {
+          ...order._doc, // Spread order details
+          productDetails: product ? product._doc : null, 
+          addressDetails: address ? address._doc : null, 
+        };
+      })
+    );
+
+    res.status(200).json(detailedOrders);
   } catch (err) {
     console.log(err);
     next(err);
   }
 };
+
 
 exports.getCart = async (req, res, next) => {
   const { id } = req.params;

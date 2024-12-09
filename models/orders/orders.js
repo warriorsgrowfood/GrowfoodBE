@@ -35,7 +35,7 @@ const orderSchema = new mongoose.Schema({
     status : {
         type : String,
     },
-    vendor : {
+    vendorId : {
         type : String,
     }
 
