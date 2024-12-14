@@ -12,6 +12,9 @@ const {
   updateAddress,
   getAddress,
   updateUser,
+  forgotPassword,
+  resetPassword,
+  verifyOtp,
   getAllusers,
 } = require("../controller/users/authController");
 const authenticateJWT = require("../middleware/authMiddleware");
@@ -28,6 +31,9 @@ router.get("/getAddress/:id", getAddress);
 router.get("/getDeliveryAddress/:id", getDeliveryAddress);
 router.get("/getallusersforadmin", getAllusers);
 router.get("/:email", getUser);
+router.get('/forgotPassword/:email', forgotPassword);
+router.post('/verifyOtp', verifyOtp);
+router.post('/resetPassword', resetPassword);
 
 
 module.exports = router;
