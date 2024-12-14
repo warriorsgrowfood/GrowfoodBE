@@ -27,21 +27,20 @@ const productSchema = mongoose.Schema({
         type : String,
     },
     image : {
-        required: true,
         type : [],
     },
     discountType : {
-        required: true,
+
         type : String,
     },
     discount : {
         type : Number,
-        required: true,
+
     },
     
     price : {
         type : Number,
-        required: true,
+
     },
     sellingPrice : {
         type : Number,
@@ -49,23 +48,23 @@ const productSchema = mongoose.Schema({
     },
     unit : {
         type : String,
-        required: true,
+
     },
     productQty : {
-        required: true,
+
         type : String,
     },
     incDecBy : {
-        required : true,
+ 
         type : Number,
     },
 
     minimumOrderQty : {
-        required : true,
         type : Number,
+        default : 1,
     },
     availableQty : {
-        required : true,
+
         type : Number,
     },
     foodPrefence : {

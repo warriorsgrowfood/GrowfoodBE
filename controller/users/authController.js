@@ -168,16 +168,18 @@ exports.loginUser = async (req, res, next) => {
   try {
     const user = await User.findOne({ email });
     if (!user) {
+      console.log("User not found");
       return res.status(404).send('User not found');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      console.log("Password not valid");
       return res.status(401).send('Invalid Password');
     }
 
     const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, { expiresIn: '8760h' });
-
+    console.log('Successfully signed')
     res.status(200).json({ token, user });
   } catch (error) {
     console.error('loginUser error:', error);

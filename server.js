@@ -20,7 +20,8 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE'], 
     allowedHeaders: ['Content-Type', 'Authorization'],
   }));
-app.use(bodyParser.json());
+app.use(bodyParser.json({limit : '5mb'}));
+app.use(bodyParser.urlencoded({limit : '5mb', extended : true}));
 
 // Database
 connectDb();

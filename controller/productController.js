@@ -391,3 +391,19 @@ exports.categoriesProduct = async(req, res, next)=>{
   }
 }
 
+exports.bulkCreate = async(req, res, next)=>{
+  const {formData} = req.body
+  
+  try{
+    console.log('Product Count : ',formData.length);
+  if(formData?.length===0){
+    res.status(400).json({ message: "Atleast one product have to create." });
+  }
+    await Product.insertMany(formData)
+    res.status(200).json({ message: 'Products successfully created'});
+  }catch(err){
+    console.error("Error in bulk creation", err);
+    res.status(500).json({ message: "Internal Server Error"});
+  }
+};
+
