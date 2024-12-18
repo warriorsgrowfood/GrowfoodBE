@@ -84,7 +84,7 @@ exports.createProduct = async (req, res, next) => {
 exports.updateProduct = async (req, res, next) => {
   const formData = req.body.formData;
   const id = formData._id;
-  console.log("updating product")
+  console.log("updating product", formData)
 
   try {
     const updatedProduct = await Product.findByIdAndUpdate(
