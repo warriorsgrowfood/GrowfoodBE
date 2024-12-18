@@ -7,14 +7,14 @@ const authSchema = new mongoose.Schema({
   },
   shopAddress : {
     type: String,
-    required: true,
+ 
   },
   gst : {
     type: String,
   }, 
   userType : {
     required: true,
-    type: String,
+
   },
   userStatus : {
     type: String,
@@ -27,8 +27,6 @@ const authSchema = new mongoose.Schema({
     required: true,
     type: String,
     unique: true,
-    
-    lowercase: true, 
   },
   password: {
     required: true,
