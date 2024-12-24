@@ -193,3 +193,20 @@ exports.adminOrders = async (req, res, next) => {
     next(err);
   }
 };
+
+
+exports.vendorOrders = async(req, res, next) => {
+  console.log('getting vendor order')
+  try{
+    const {id} = req.params;
+    const orders = await Order.find({vendorId: id});
+    if(orders){
+      res.status(200).json(orders);
+    }else{
+      res.status(404).json({message: 'Orders not found'});
+    }
+  }catch(err){
+    console.error(err);
+    next(err);
+  }
+}
