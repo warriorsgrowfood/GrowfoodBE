@@ -168,15 +168,27 @@ exports.getBrands = async (req, res, next) => {
   }
 };
 
+exports.getBrandsProduct = async(req, res)=>{
+  const {brand} = req.params;
+
+  try{
+    const products = await Product.find({brand : brand})
+    res.status(200).json(products);
+  }catch(err){
+    console.error("Error in Searching:", err);
+    res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
+}
+
 exports.updateBrands = async (req, res, next) => {
   const { id } = req.params;
   const { name, icon } = req.body;
-  console.log("Brand update triggered", name, icon);
+  console.log("Brand update triggered", req.body);
 
   try {
     const brand = await Brand.findByIdAndUpdate(
       id,
-      { name, icon },
+      { name, icon }, 
       { new: true }
     );
 
@@ -229,7 +241,8 @@ exports.deleteBrand = async(req, res, next) => {
 
 exports.createCategory = async (req, res, next) => {
   try {
-    const { name, icon } = req.body;
+    let { name, icon } = req.body;
+    name = name.toLowerCase();
     
     const existingCategory = await Category.findOne({ name });
     if (!existingCategory) {
@@ -383,7 +396,7 @@ exports.categoriesProduct = async(req, res, next)=>{
   const {category} = req.params;
   console.log(category);
   try{
-    const products = await Product.find({categories : category})
+    const products = await Product.find({categories : category.toLowerCase()})
     res.status(200).json(products);
   }catch(err){
     console.error("Error in Searching:", err);
