@@ -153,7 +153,7 @@ exports.getOrder = async (req, res, next) => {
       // Fetch address details for the order
       const address = await Address.findById(order.addressId);
 
-      // Return the full order with product and address details
+     
       return {
         orderId: order._id,
         userId: order.userId,
@@ -162,8 +162,8 @@ exports.getOrder = async (req, res, next) => {
         billAmount: order.billAmount,
         date: order.date,
         status: order.status,
-        products: products, // Attach the products array
-        address: address ? address._doc : null // Attach address if exists
+        products: products, 
+        address: address ? address._doc : null
       };
     }));
 
