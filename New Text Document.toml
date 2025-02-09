@@ -1,0 +1,7 @@
+[build]
+  command = "npm install" # No build step needed
+  functions = "netlify/functions"
+
+[dev]
+  command = "npm run start"
+  port = 8888
