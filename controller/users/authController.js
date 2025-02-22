@@ -6,6 +6,7 @@ const Cart = require('../../models/orders/cart')
 const Order = require('../../models/orders/orders');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const Product = require('../../models/products/product');
 
 const Address = require('../../models/users/addressSchema');
 
@@ -105,7 +106,7 @@ exports.resetPassword = async (req, res, next) => {
 
 
 exports.createUser = async (req, res, next) => {
-  const {shopName, name, email, password, mobile, userType, shopAddress, gst } = req.body;
+  const {shopName, name, email, password, mobile, userType, shopAddress, gst, state, city, distributionAreas } = req.body;
 
   try {
     const existingUser = await User.findOne({ email });
@@ -115,7 +116,7 @@ exports.createUser = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({shopName, name, email, password: hashedPassword, mobile, shopAddress, gst, userType,});
+    const newUser = new User({shopName, name, email, password: hashedPassword, mobile, shopAddress, gst, userType, state, city, distributionAreas});
     await newUser.save();
 
     res.status(200).json({ message: 'User created successfully' });
@@ -343,4 +344,32 @@ exports.getAllusers = async (req, res, next) => {
     next(err);
   }
 }
+
+exports.getDistributors = async (req, res, next) => {
+  try {
+    // Fetch all vendors
+    const distributors = await User.find({ userType: "Vendor" });
+
+    // Map through vendors and fetch product count for each vendor
+    const distributorData = await Promise.all(
+      distributors.map(async (vendor) => {
+        const productCount = await Product.countDocuments({ vendorId: vendor._id });
+        return {
+          id : vendor._id,
+          name: vendor.name,
+          city: vendor.city,
+          area: vendor.distributionAreas,
+          productCount,
+        };
+      })
+    );
+
+    // Send the response
+    res.status(200).json(distributorData);
+  } catch (err) {
+    console.error(err);
+    next(err);
+  }
+};
+
 

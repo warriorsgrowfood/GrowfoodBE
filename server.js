@@ -8,6 +8,7 @@ const order = require('./routes/orderRoutes');
 const admin = require('./routes/adminRoutes');
 const connectDb = require('./config/db')
 const vendorRoute = require('./routes/vendorRoutes')
+const activity = require('./routes/activityRoutes')
 
 require('dotenv').config();
 
@@ -33,6 +34,7 @@ app.use('/api/users', auth)
 app.use('/api/orders', order)
 app.use('/api/admin', admin)
 app.use('/api/vendors', vendorRoute)
+app.use('/api/activity', activity)
 
 // Handling errors
 app.use(errorHandler);

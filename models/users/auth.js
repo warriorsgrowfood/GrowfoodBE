@@ -38,6 +38,15 @@ const authSchema = new mongoose.Schema({
   },
   image : {
     type: String,
+  },
+  state : {
+    type: String,
+  },
+  city : {
+    type: String,
+  },
+  distributionAreas : {
+    type: [String],
   }
   
   

@@ -6,7 +6,7 @@ const Products = require('../models/products/product');
 const { VendorProducts, handleDisplay } = require('../controller/Admin/adminController');
 
 router.get('/orders/:id/:page', vendorOrders)
-router.get('/products/:id', VendorProducts)
+router.get('/products/:id/:page', VendorProducts)
 router.put('/displayProducts', handleDisplay)
 router.put('/updateOrder', updateOrderStatus)
 
