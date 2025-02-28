@@ -47,9 +47,8 @@ const authSchema = new mongoose.Schema({
   },
   distributionAreas : {
     type: [String],
-  }
-  
-  
+  },
+  chatters: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 
 const User = mongoose.model('User', authSchema);

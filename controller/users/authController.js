@@ -373,3 +373,63 @@ exports.getDistributors = async (req, res, next) => {
 };
 
 
+exports.chatters = async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    // Find the user
+    const user = await User.findById(id).populate('chatters', 'id name image userStatus');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Fetch the admin user
+    const superUser = await User.findOne({ userType: 'admin' }).select('id name image userStatus');
+
+    res.status(200).json({
+      chatters: user.chatters.map(chatter => ({
+        id: chatter._id,
+        name: chatter.name,
+        image: chatter.image,
+        isActive: chatter.userStatus === 'active' // Assuming 'userStatus' represents activity
+      })),
+      admin: superUser ? {
+        id: superUser._id,
+        name: superUser.name,
+        image: superUser.image,
+        isActive: superUser.userStatus === 'active'
+      } : null
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+
+
+
+async function sendMessage(senderId, receiverId, messageText) {
+  try {
+    let chat = await Chat.findOne({
+      participants: { $all: [senderId, receiverId] }
+    });
+
+    if (!chat) {
+      chat = new Chat({ participants: [senderId, receiverId], messages: [] });
+    }
+
+    chat.messages.push({
+      sender: senderId,
+      message: messageText
+    });
+
+    await chat.save();
+    console.log('Message sent successfully');
+  } catch (error) {
+    console.error('Error sending message:', error);
+  }
+}
+

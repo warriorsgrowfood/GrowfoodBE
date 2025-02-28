@@ -2,6 +2,7 @@ const Orders = require("../../models/orders/orders");
 const Product = require("../../models/products/product");
 const Address = require("../../models/users/addressSchema");
 
+
 exports.analyticsData = async (req, res, next) => {
   try {
     const orders = await Orders.countDocuments();
