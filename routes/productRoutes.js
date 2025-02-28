@@ -20,7 +20,8 @@ const {
   bulkCreate,
   getTopRatedProducts,
   getBrandsProduct,
-  createUnit, getUnit, subProduct, CreateSubCategory, getSubCategory, categoriesProduct
+  createUnit, getUnit, subProduct, CreateSubCategory, getSubCategory, categoriesProduct,
+  filterController
 } = require("../controller/productController"); // Make sure the path is correct
 
 
@@ -32,6 +33,7 @@ router.delete("/deleteProduct/:id", deleteProduct);
 router.post("/", createProduct);
 router.get("/subProduct/:subCategory", subProduct)
 router.get('/search/searchInDatabase', searchController)
+router.get('/filter', filterController)
 router.get('/categoriesProduct/:category/:page', categoriesProduct)
 router.get('/brandsProduct/:brand/:page', getBrandsProduct)
 router.post('/products/bulkCreate', bulkCreate)

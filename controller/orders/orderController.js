@@ -3,6 +3,7 @@ const dateFns = require("date-fns");
 const Cart = require("../../models/orders/cart");
 const Product = require("../../models/products/product");
 const Address = require("../../models/users/addressSchema");
+const cart = require("../../models/orders/cart");
 
 exports.createOrder = async (req, res, next) => {
   try {
@@ -10,13 +11,17 @@ exports.createOrder = async (req, res, next) => {
     const istDate = dateFns.format(date, "yyyy-MM-dd HH:mm:ss", {
       timeZone: "Asia/Kolkata",
     });
-    const bdata = req.body.formData; // Array of orders
+    const bdata = req.body.formData; 
     const orders = ({...bdata, date : istDate})
+    console.log('orders: ', orders);
 
     const newOrder = new Order(orders);
     await newOrder.save();
-    
-
+    const productIds = orders.productsArray.map(item => item.productId);
+    await Cart.deleteMany({
+      userId : bdata.userId,
+      productId : {$in : productIds},
+    })
 
 
     return res.status(200).json({ message: "Order Created" });

@@ -4,7 +4,7 @@ const Category = require("../models/products/categories");
 const SubCategory = require("../models/products/SubCategory");
 const Unit = require("../models/products/unitSchema");
 const product = require("../models/products/product");
-
+const Distributor = require("../models/users/auth");
 // Getting Products
 exports.getProducts = async (req, res, next) => {
   try {
@@ -355,6 +355,8 @@ exports.getSubCategory = async (req, res, next) => {
 
 // -------------Search controller --------------------------------
 
+
+
 exports.searchController = async (req, res, next) => {
   const { query } = req.query;
   if (!query) {
@@ -370,23 +372,58 @@ exports.searchController = async (req, res, next) => {
       ],
     }).limit(10);
 
-    // Attach type to the results
-    const resultWithTypes = products.map((product) => ({
-      ...product.toObject(),
-      type: "product", // Marking this as a product
-    }));
+    const brands = await Brand.find({
+      name: { $regex: query, $options: "i" },
+    }).limit(10);
 
-    const allResults = [...resultWithTypes];
+    const categories = await Category.find({
+      name: { $regex: query, $options: "i" },
+    }).limit(10);
 
-    return res.status(200).json(allResults);
+    const distributors = await Distributor.find({
+      name: { $regex: query, $options: "i" }, userType : 'Vendor',
+    }).limit(10);
+
+    const resultWithTypes = [
+      ...products.map(product => ({ ...product.toObject(), type: "product" })),
+      ...brands.map(brand => ({ ...brand.toObject(), type: "brand" })),
+      ...categories.map(category => ({ ...category.toObject(), type: "category" })),
+      ...distributors.map(distributor => ({ ...distributor.toObject(), type: "distributor" })),
+    ];
+
+    return res.status(200).json(resultWithTypes);
   } catch (err) {
     console.error("Error in Searching:", err);
-    return res
-      .status(500)
-      .json({ message: "Internal Server Error", error: err.message });
+    return res.status(500).json({ message: "Internal Server Error", error: err.message });
   }
 };
 
+exports.filterController = async (req, res, next) => {
+  const { type, value } = req.query;
+  console.log(type, value);
+
+  try {
+    let filteredResults;
+    switch (type) {
+      case 'brand':
+        filteredResults = await Product.find({ brand: value });
+        break;
+      case 'category':
+        filteredResults = await Product.find({ categories: value });
+        break;
+      case 'distributor':
+        filteredResults = await Product.find({ vendorId : value });
+        break;
+      default:
+        return res.status(400).json({ message: "Invalid filter type" });
+    }
+
+    return res.status(200).json(filteredResults);
+  } catch (err) {
+    console.error("Error in Filtering:", err);
+    return res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
+};
 exports.categoriesProduct = async (req, res, next) => {
   const { category } = req.params;
 
