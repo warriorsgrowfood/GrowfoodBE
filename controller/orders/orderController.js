@@ -216,74 +216,74 @@ exports.adminOrders = async (req, res, next) => {
 exports.vendorOrders = async (req, res, next) => {
   try {
     const { id, page } = req.params; // Vendor ID
-  
     const limit = 50;
-    const skip = (page - 1) * limit;
+    const skip = (parseInt(page, 10) - 1) * limit;
 
     console.log("Vendor ID:", id, "Page:", page);
 
-    // Fetch all orders containing products with the given vendor ID
-    const orders = await Order.find({ "productsArray.vendorId": id })
+    // Fetch orders that contain products linked to the given vendor
+    const orders = await Order.find({ "productsArray.productId": { $exists: true } })
       .skip(skip)
       .limit(limit);
 
-    if (!orders || orders.length === 0) {
+    if (!orders.length) {
       return res.status(404).json({ message: "Orders not found" });
     }
 
-    // Iterate through orders to construct the vendor-specific response
-    const venOrders = await Promise.all(
-      orders.map(async (order) => {
-        // Filter products belonging to the vendor
-        const filteredProducts = order.productsArray.filter(
-          (product) => product.vendorId === id
-        );
+    // Extract product IDs from the orders
+    const productIds = orders.flatMap(order => order.productsArray.map(p => p.productId));
 
-        // Fetch additional details for the filtered products
-        const productDetails = await Promise.all(
-          filteredProducts.map(async (product) => {
-            const productInfo = await Product.findById(product.productId);
-            return {
-              productId: product.productId,
-              name: productInfo?.name || "Unknown",
-              brand: productInfo?.brand || "Unknown",
-              price: productInfo?.price || 0,
-              category: productInfo?.categories || "Uncategorized",
-              sellingPrice: productInfo?.sellingPrice || 0,
-              discount: productInfo?.discount || 0,
-              quantity: product.quantity,
-              totalPrice: product.totalPrice,
-            };
-          })
-        );
+    // Fetch product details in one go
+    const products = await Product.find({ _id: { $in: productIds }, vendorId: id });
 
-        // Calculate total bill amount for this vendor's products in the order
-        const venOrderAmount = filteredProducts.reduce(
-          (sum, product) => sum + product.totalPrice,
-          0
-        );
+    // Create a map of product details
+    const productMap = new Map(products.map(product => [product._id.toString(), product]));
 
-        return {
-          orderId: order._id,
-          userId: order.userId,
-          paymentId: order.paymentId,
-          paymentMode: order.paymentMode,
-          date: order.date,
-          status: order.status,
-          venOrderAmount,
-          orderQty: order.quantity,
-          productDetails,
-          addressId: order.addressId,
-        };
-      })
-    );
+    // Construct vendor-specific orders response
+    const venOrders = orders.map(order => {
+      // Filter products belonging to the vendor
+      const filteredProducts = order.productsArray
+        .filter(product => productMap.has(product.productId))
+        .map(product => {
+          const productInfo = productMap.get(product.productId);
+          return {
+            productId: product.productId,
+            name: productInfo?.name || "Unknown",
+            brand: productInfo?.brand || "Unknown",
+            price: productInfo?.price || 0,
+            category: productInfo?.categories || "Uncategorized",
+            sellingPrice: productInfo?.sellingPrice || 0,
+            discount: productInfo?.discount || 0,
+            quantity: product.quantity,
+            totalPrice: product.totalPrice,
+          };
+        });
 
-    // Count total orders for pagination metadata
-    const totalOrders = await Order.countDocuments({ "productsArray.vendorId": id });
+      if (filteredProducts.length === 0) return null; // Skip orders without vendor's products
+
+      const venOrderAmount = filteredProducts.reduce((sum, product) => sum + product.totalPrice, 0);
+      const orderQty = filteredProducts.reduce((sum, product) => sum + product.quantity, 0);
+
+      return {
+        orderId: order._id,
+        userId: order.userId,
+        paymentId: order.paymentId,
+        paymentMode: order.paymentMode,
+        date: order.date,
+        status: order.status,
+        venOrderAmount,
+        orderQty,
+        productDetails: filteredProducts,
+        addressId: order.addressId,
+      };
+    }).filter(order => order !== null); // Remove null entries
+
+    // Count total orders for pagination
+    const totalOrders = await Order.countDocuments({ "productsArray.productId": { $exists: true } });
     const totalPages = Math.ceil(totalOrders / limit);
 
     res.status(200).json({
-      page,
+      page: parseInt(page, 10),
       totalPages,
       totalOrders,
       ordersPerPage: limit,
@@ -294,6 +294,7 @@ exports.vendorOrders = async (req, res, next) => {
     next(err);
   }
 };
+
 
 exports.updateOrderStatus = async (req, res, next) => {
   const {orderId, status} = req.body;

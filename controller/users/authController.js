@@ -102,6 +102,31 @@ exports.resetPassword = async (req, res, next) => {
   }
 };
 
+exports.getOneUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const data = {
+      name: user.name,
+      email: user.email,
+      shopName: user.shopName,
+      gst: user.gst,
+      mobile: user.mobile,
+    };
+
+    res.status(200).json(data);
+  } catch (e) {
+    console.error("Error in getting user", e);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+
+
 
 
 
