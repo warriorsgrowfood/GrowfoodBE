@@ -275,7 +275,11 @@ exports.createCategory = async (req, res, next) => {
 exports.getCategories = async (req, res, next) => {
   try {
     const categories = await Category.find();
-    res.status(200).json(categories);
+    const updatedCategories = categories.map(cat=>({
+      ...cat._doc,
+      icon: convertToHttps(cat.icon),
+    }))
+    res.status(200).json(updatedCategories);
   } catch (err) {
     console.error(err);
     next(err);
