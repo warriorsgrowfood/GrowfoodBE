@@ -48,6 +48,9 @@ const authSchema = new mongoose.Schema({
   distributionAreas : {
     type: [String],
   },
+  fcmToken : {
+    type : String,
+  },
   chatters: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 

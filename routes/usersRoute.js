@@ -17,6 +17,7 @@ const {
   verifyOtp,
   getAllusers,
   getOneUser,
+  updateFcm,
 } = require("../controller/users/authController");
 const authenticateJWT = require("../middleware/authMiddleware");
 
@@ -36,6 +37,7 @@ router.get('/forgotPassword/:email', forgotPassword);
 router.post('/verifyOtp', verifyOtp);
 router.post('/resetPassword', resetPassword);
 router.get('/getOneUser/:id', getOneUser)
+router.put('/updateFcmToken', updateFcm)
 
 
 module.exports = router;

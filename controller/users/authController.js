@@ -458,3 +458,14 @@ async function sendMessage(senderId, receiverId, messageText) {
   }
 }
 
+exports.updateFcm = async(req, res, next)=>{
+  const {fcmToken, userId} = req.body;
+  try{
+    const user = await User.findByIdAndUpdate(userId, {fcmToken : fcmToken}, {new : true});
+    return res.status(200).json({message : 'Token Updated'})
+  }catch(e){
+    console.error('Error in updating fcm token', e)
+    next(e);
+  }
+}
+

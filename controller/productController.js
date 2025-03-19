@@ -151,11 +151,22 @@ exports.deleteProduct = async (req, res, next) => {
 exports.getBrands = async (req, res, next) => {
   try {
     const brands = await Brand.find();
-    res.status(200).json(brands);
+    const updatedBrands = brands.map(brand => ({
+      ...brand._doc,
+      icon: convertToHttps(brand.icon), // Convert the icon URL
+    }));
+    res.status(200).json(updatedBrands);
   } catch (err) {
     console.error(err);
     next(err);
   }
+};
+
+const convertToHttps = (url) => {
+  if (typeof url === 'string' && url.startsWith('http://')) {
+    return url.replace('http://', 'https://');
+  }
+  return url; // Return original URL if it's already https or not a string
 };
 
 exports.getBrandsProduct = async (req, res) => {

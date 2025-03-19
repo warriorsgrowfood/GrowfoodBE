@@ -9,9 +9,25 @@ const admin = require('./routes/adminRoutes');
 const connectDb = require('./config/db')
 const vendorRoute = require('./routes/vendorRoutes')
 const activity = require('./routes/activityRoutes')
+const firebaseAdmin = require('firebase-admin');
 
 require('dotenv').config();
 
+firebaseAdmin.initializeApp({
+  credential: firebaseAdmin.credential.cert({
+    type: process.env.FBTYPE,
+  project_id: process.env.FB_PID,
+  private_key_id: process.env.FB_PKID,   
+  private_key: process.env.FB_P.replace(/\\n/g, '\n'), 
+  client_email: process.env.FB_C_EMAIL,
+  client_id: process.env.FB_CID,
+  auth_uri: process.env.FB_AURI,
+  token_uri: process.env.FB_TOKEN,
+  auth_provider_x509_cert_url: process.env.FB_AUTHP,
+  client_x509_cert_url: process.env.FB_CXCU,
+  universe_domain: process.env.FB_UD || 'googleapis.com',
+  }),
+})
 
 const app = express();
 const port = 5000;

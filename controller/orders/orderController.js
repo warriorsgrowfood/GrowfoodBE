@@ -4,6 +4,9 @@ const Cart = require("../../models/orders/cart");
 const Product = require("../../models/products/product");
 const Address = require("../../models/users/addressSchema");
 const cart = require("../../models/orders/cart");
+const Notification = require('../../models/activity/notification');
+const User = require("../../models/users/auth");
+const admin = require('firebase-admin')
 
 exports.createOrder = async (req, res, next) => {
   try {
@@ -299,11 +302,42 @@ exports.vendorOrders = async (req, res, next) => {
 exports.updateOrderStatus = async (req, res, next) => {
   const {orderId, status} = req.body;
   try{
-     await Order.findByIdAndUpdate(orderId, {status : status}, {new : true});
+     const order = await Order.findByIdAndUpdate(orderId, {status : status}, {new : true});
+     const data = {
+      title : 'Order Updated', 
+      text : `your order status updated as  ${status}`,
+      icon : 1,
+      userId  : order.userId,
+      notification : true,
+      
+     };
+     await createNotification(data);
     res.status(200).json({message : 'Order status updated successfully'});
   }catch(e){
     console.error('Error in updating order status',e);
     next(e);
+  }
+}
+
+const createNotification = async(noti)=>{
+  try{
+   const res = new Notification(noti);
+   if(noti?.notification){
+      const user = await User.findById(noti.userId)
+      const message = {
+        token : user.fcmToken,
+        data : {
+          title : noti.title, 
+          text : noti.text,
+        }
+      }
+      const res = await admin.messaging().send(message); 
+      console.log('fcm message sent to', noti.userId)
+   }
+   return true;
+  }catch(e){
+    console.error('Error in creating notification', e)
+    return false
   }
 }
 
