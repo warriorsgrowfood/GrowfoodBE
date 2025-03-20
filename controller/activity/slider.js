@@ -21,3 +21,13 @@ exports.addSlider = async (req, res, next) => {
         res.status(500).json({ error: 'Server error' });
     }
 };
+
+exports.removeSlide = async(req, res, next) => {
+    try{
+        await Slider.findByIdAndDelete(req.params.id)
+        res.status(200).json({message: 'Slider removed'});
+    }catch(e){
+        console.error(e);
+        res.status(500).json({message: 'Server error'});
+    }
+};

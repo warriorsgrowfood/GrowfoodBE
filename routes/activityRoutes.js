@@ -5,6 +5,7 @@ const {createArea, getArea} = require('../controller/activity/area');
 const {getDistributors} = require('../controller/users/authController');
 
 
+
 const {} = 
 
 router.get('/notification', );

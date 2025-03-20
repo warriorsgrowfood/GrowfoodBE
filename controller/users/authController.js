@@ -7,6 +7,7 @@ const Order = require('../../models/orders/orders');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const Product = require('../../models/products/product');
+const Notification = require('../../models/activity/notification');
 
 const Address = require('../../models/users/addressSchema');
 
@@ -468,4 +469,31 @@ exports.updateFcm = async(req, res, next)=>{
     next(e);
   }
 }
+
+exports.getNotification = async(req, res, next) => {
+  try{
+    const notifications = await Notification.find({userId: req.params.id});
+    res.status(200).json(notifications);
+  }catch(e){
+    console.error('Error in getting notification', e)
+    next(e);
+  }
+};
+
+exports.updateNotiSeen = async (req, res, next) => {
+  try {
+    const { userId } = req.body;
+    console.log('user is ', userId);
+
+     await Notification.updateMany(
+      { userId: userId, isSeen: false }, 
+      { $set: { isSeen: true } }         
+    );
+
+    return res.status(200).json({ success: true, message: 'Notifications updated',  });
+  } catch (e) {
+    console.error('Error in updating notification', e);
+    next(e);
+  }
+};
 

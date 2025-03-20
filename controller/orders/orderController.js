@@ -309,6 +309,7 @@ exports.updateOrderStatus = async (req, res, next) => {
       icon : 1,
       userId  : order.userId,
       notification : true,
+      isSeen : false,
       
      };
      await createNotification(data);
@@ -321,7 +322,7 @@ exports.updateOrderStatus = async (req, res, next) => {
 
 const createNotification = async(noti)=>{
   try{
-   const res = new Notification(noti);
+   const newNoti = new Notification(noti);
    if(noti?.notification){
       const user = await User.findById(noti.userId)
       const message = {
@@ -334,6 +335,7 @@ const createNotification = async(noti)=>{
       const res = await admin.messaging().send(message); 
       console.log('fcm message sent to', noti.userId)
    }
+   await newNoti.save();
    return true;
   }catch(e){
     console.error('Error in creating notification', e)

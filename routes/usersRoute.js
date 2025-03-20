@@ -18,6 +18,8 @@ const {
   getAllusers,
   getOneUser,
   updateFcm,
+  getNotification,
+  updateNotiSeen,
 } = require("../controller/users/authController");
 const authenticateJWT = require("../middleware/authMiddleware");
 
@@ -38,6 +40,8 @@ router.post('/verifyOtp', verifyOtp);
 router.post('/resetPassword', resetPassword);
 router.get('/getOneUser/:id', getOneUser)
 router.put('/updateFcmToken', updateFcm)
+router.get('/notifications/:id', getNotification)
+router.put('/notifications', updateNotiSeen)
 
 
 module.exports = router;
