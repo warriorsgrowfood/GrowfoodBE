@@ -8,47 +8,61 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const Product = require('../../models/products/product');
 const Notification = require('../../models/activity/notification');
-
+const OtpModel = require('../../models/users/OtpModel');
 const Address = require('../../models/users/addressSchema');
+const Chat = require('../../models/users/chat');
 
 const SECRET_KEY = process.env.JWT_KEY;
 
 
 
 
-const otpStore = new Map();
 
+const sendEmail = async (to, subject, text) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.MAIL_ID,
+        pass: process.env.MAIL_PASSWORD,
+      },
+    });
+
+    await transporter.sendMail({
+      from: process.env.MAIL_ID,
+      to,
+      subject,
+      text,
+    });
+
+    console.log(`OTP email sent to ${to}`);
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw new Error('Error sending OTP email');
+  }
+};
+
+// Forgot Password - Generate and store OTP
 exports.forgotPassword = async (req, res, next) => {
   const { email } = req.params;
 
   try {
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).send('User with this email does not exist');
-    }
-    const otp = crypto.randomInt(100000, 999999); // 6-digit OTP
+    if (!user) return res.status(404).json({ message: 'User with this email does not exist' });
 
-    // Store OTP temporarily with expiration
-    otpStore.set(email, { otp, expires: Date.now() + 10 * 60 * 1000 }); // Valid for 10 minutes
+    const otp = crypto.randomInt(100000, 999999).toString(); // Generate 6-digit OTP
+    const hashedOtp = await bcrypt.hash(otp, 10); // Secure storage
+
+    // Store OTP in database with expiration (10 minutes)
+    await OtpModel.findOneAndUpdate(
+      { email },
+      { otp: hashedOtp, expiresAt: Date.now() + 10 * 60 * 1000 },
+      { upsert: true, new: true }
+    );
 
     // Send OTP via email
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.MAIL_ID, // Replace with your email
-        pass: process.env.MAIL_PASSWORD, // Replace with your email password
-      },
-    });
-
-    const mailOptions = {
-      from: process.env.EMAIL,
-      to: email,
-      subject: 'Password Reset OTP',
-      text: `Your OTP for password reset is: ${otp}. It is valid for 10 minutes.`,
-    };
-
-    await transporter.sendMail(mailOptions);
-
+    await sendEmail(email, 'Password Reset OTP', `Your OTP is: ${otp}. Valid for 10 minutes.`);
+    console.log('Your OTP is:', otp);
     res.status(200).json({ message: 'OTP sent to email' });
   } catch (error) {
     console.error('forgotPassword error:', error);
@@ -56,32 +70,35 @@ exports.forgotPassword = async (req, res, next) => {
   }
 };
 
+// Verify OTP
 exports.verifyOtp = async (req, res, next) => {
   const { email, otp } = req.body;
 
   try {
-    const storedOtp = otpStore.get(email);
+    const storedOtpRecord = await OtpModel.findOne({ email });
+    console.log(storedOtpRecord);
+    if (!storedOtpRecord) return res.status(400).json({ message: 'No OTP found for this email' });
 
-    if (!storedOtp) {
-      return res.status(400).send('No OTP found for this email');
+    // Check expiration
+    if (Date.now() > storedOtpRecord.expiresAt) {
+      await OtpModel.deleteOne({ email });
+      return res.status(400).json({ message: 'OTP has expired' });
     }
 
-    if (storedOtp.otp !== parseInt(otp, 10)) {
-      return res.status(400).send('Invalid OTP');
-    }
+    // Compare hashed OTP
+    const isOtpValid = await bcrypt.compare(otp, storedOtpRecord.otp);
+    if (!isOtpValid) return res.status(400).json({ message: 'Invalid OTP' });
 
-    if (Date.now() > storedOtp.expires) {
-      otpStore.delete(email);
-      return res.status(400).send('OTP has expired');
-    }
+    // OTP verified, delete from DB
+    await OtpModel.deleteOne({ email });
 
-    otpStore.delete(email);
     res.status(200).json({ message: 'OTP verified successfully' });
   } catch (error) {
     console.error('verifyOtp error:', error);
     next(error);
   }
 };
+
 
 exports.resetPassword = async (req, res, next) => {
   const { email, newPassword } = req.body;
@@ -133,7 +150,7 @@ exports.getOneUser = async (req, res, next) => {
 
 exports.createUser = async (req, res, next) => {
   const {shopName, name, email, password, mobile, userType, shopAddress, gst, state, city, distributionAreas } = req.body;
-
+  console.log(req.body);
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -142,10 +159,11 @@ exports.createUser = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({shopName, name, email, password: hashedPassword, mobile, shopAddress, gst, userType, state, city, distributionAreas});
-    await newUser.save();
+    const user = new User({shopName, name, email, password: hashedPassword, mobile, shopAddress, gst, userType, state, city, distributionAreas});
+    await user.save();
+    const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, { expiresIn: '8760h' });
 
-    res.status(200).json({ message: 'User created successfully' });
+    res.status(200).json({user, token});
   } catch (error) {
     console.error('createUser error:', error);
     next(error);
@@ -296,8 +314,9 @@ exports.getAddress = async (req, res, next) => {
  
   try {
     const {id} = req.params;
-  
+    console.log('id is', id)
     const addresses = await Address.find({userId: id});
+    console.log('address is', addresses)
     if(addresses){
       res.status(200).json(addresses);
     }else{
@@ -496,4 +515,41 @@ exports.updateNotiSeen = async (req, res, next) => {
     next(e);
   }
 };
+
+exports.createChat = async(req, res, next) => {
+  try{
+    console.log('request body is ', req.body)
+    const neChat = new Chat(req.body);
+    await neChat.save();
+    console.log('chat saved')
+    return res.status(200).json({message : neChat})
+  }catch(e){
+    console.error('Error in creating chat', e)
+    next(e);
+  }
+};
+
+exports.getChats = async (req, res, next) => {
+  const id = req.params.id;
+  try{
+    console.log('id i s', id);
+    const chats = await Chat.find({sender : id})
+  
+    console.log('chats have', chats)
+    res.status(200).json(chats);
+  }catch(e){
+    console.error('Eror in getting', e)
+    next(e); 
+  }
+};
+
+exports.getChatsAdmin = async(req, res, next)=>{
+  try{
+    const chats = await Chat.find();
+    return res.status(200).json(chats);
+  }catch(e){
+    console.error('Error in getting', e)
+    next(e);
+  }
+}
 

@@ -20,6 +20,7 @@ const {
   updateFcm,
   getNotification,
   updateNotiSeen,
+  createChat, getChats, getChatsAdmin,
 } = require("../controller/users/authController");
 const authenticateJWT = require("../middleware/authMiddleware");
 
@@ -42,6 +43,9 @@ router.get('/getOneUser/:id', getOneUser)
 router.put('/updateFcmToken', updateFcm)
 router.get('/notifications/:id', getNotification)
 router.put('/notifications', updateNotiSeen)
+router.get('/chats/:id', getChats);
+router.post('/chats', createChat);
+router.get('/admin/chats', getChatsAdmin);
 
 
 module.exports = router;
