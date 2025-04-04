@@ -3,28 +3,28 @@ const Brand = require("../models/products/brandSchema");
 const Category = require("../models/products/categories");
 const SubCategory = require("../models/products/SubCategory");
 const Unit = require("../models/products/unitSchema");
-const axios = require('axios');
+const axios = require("axios");
 const Distributor = require("../models/users/auth");
 const User = require("../models/users/auth");
 
-
-
-
-
-
 async function calculateDistance(address1, address2, vendorId, radius) {
-  if (!address1 || !address2) return { error: "Missing origin or destination address" };
-  if (!vendorId || !radius || isNaN(radius)) return { error: "Invalid vendorId or radius" };
+  if (!address1 || !address2)
+    return { error: "Missing origin or destination address" };
+  if (!vendorId || !radius || isNaN(radius))
+    return { error: "Invalid vendorId or radius" };
 
   try {
-    const response = await axios.get("https://maps.googleapis.com/maps/api/distancematrix/json", {
-      params: {
-        origins: address1,
-        destinations: address2,
-        key: "AIzaSyAi2MQyWnPyrSAY_jny04NPMKWoXZH5M1c", // TODO: Move to .env in production
-        units: "metric",
-      },
-    });
+    const response = await axios.get(
+      "https://maps.googleapis.com/maps/api/distancematrix/json",
+      {
+        params: {
+          origins: address1,
+          destinations: address2,
+          key: "AIzaSyAi2MQyWnPyrSAY_jny04NPMKWoXZH5M1c", // TODO: Move to .env in production
+          units: "metric",
+        },
+      }
+    );
 
     const data = response.data;
     if (data.rows.length && data.rows[0].elements.length) {
@@ -45,15 +45,14 @@ async function calculateDistance(address1, address2, vendorId, radius) {
 exports.getProducts = async (req, res, next) => {
   try {
     const { page, address } = req.params;
-    
-    
+
     if (!address) {
       return res.status(400).json({
         success: false,
         message: "User address is required",
       });
     }
-    
+
     const result = await getProductsGlobally(parseInt(page), address, 50);
     res.status(result.status).json(result.response);
   } catch (error) {
@@ -74,9 +73,15 @@ const getProductsGlobally = async (page, address, limit, filterBy) => {
 
     const nearbyVendorIds = [];
     for (const vendor of vendors) {
-      if (!vendor.shopAddress || !vendor.radius || isNaN(vendor.radius)) continue;
+      if (!vendor.shopAddress || !vendor.radius || isNaN(vendor.radius))
+        continue;
 
-      const result = await calculateDistance(address, vendor.shopAddress, vendor._id, vendor.radius);
+      const result = await calculateDistance(
+        address,
+        vendor.shopAddress,
+        vendor._id,
+        vendor.radius
+      );
       if (result && !result.error) nearbyVendorIds.push(result);
     }
 
@@ -86,7 +91,13 @@ const getProductsGlobally = async (page, address, limit, filterBy) => {
         response: {
           success: true,
           data: [],
-          pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false },
+          pagination: {
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+            hasNextPage: false,
+          },
           message: "No nearby vendors found",
         },
       };
@@ -120,7 +131,11 @@ const getProductsGlobally = async (page, address, limit, filterBy) => {
     console.error("Error in getProductsGlobally:", error);
     return {
       status: 500,
-      response: { success: false, message: "Server error", error: error.message },
+      response: {
+        success: false,
+        message: "Server error",
+        error: error.message,
+      },
     };
   }
 };
@@ -244,7 +259,7 @@ exports.deleteProduct = async (req, res, next) => {
 exports.getBrands = async (req, res, next) => {
   try {
     const brands = await Brand.find();
-    const updatedBrands = brands.map(brand => ({
+    const updatedBrands = brands.map((brand) => ({
       ...brand._doc,
       icon: convertToHttps(brand.icon), // Convert the icon URL
     }));
@@ -256,8 +271,8 @@ exports.getBrands = async (req, res, next) => {
 };
 
 const convertToHttps = (url) => {
-  if (typeof url === 'string' && url.startsWith('http://')) {
-    return url.replace('http://', 'https://');
+  if (typeof url === "string" && url.startsWith("http://")) {
+    return url.replace("http://", "https://");
   }
   return url; // Return original URL if it's already https or not a string
 };
@@ -368,10 +383,10 @@ exports.createCategory = async (req, res, next) => {
 exports.getCategories = async (req, res, next) => {
   try {
     const categories = await Category.find();
-    const updatedCategories = categories.map(cat=>({
+    const updatedCategories = categories.map((cat) => ({
       ...cat._doc,
       icon: convertToHttps(cat.icon),
-    }))
+    }));
     res.status(200).json(updatedCategories);
   } catch (err) {
     console.error(err);
@@ -463,8 +478,6 @@ exports.getSubCategory = async (req, res, next) => {
 
 // -------------Search controller --------------------------------
 
-
-
 exports.searchController = async (req, res, next) => {
   const { query } = req.query;
   if (!query) {
@@ -489,31 +502,41 @@ exports.searchController = async (req, res, next) => {
     }).limit(10);
 
     const distributors = await Distributor.find({
-      name: { $regex: query, $options: "i" }, userType : 'Vendor',
+      name: { $regex: query, $options: "i" },
+      userType: "Vendor",
     }).limit(10);
 
     const resultWithTypes = [
-      ...products.map(product => ({ ...product.toObject(), type: "product" })),
-      ...brands.map(brand => ({ ...brand.toObject(), type: "brand" })),
-      ...categories.map(category => ({ ...category.toObject(), type: "category" })),
-      ...distributors.map(distributor => ({ ...distributor.toObject(), type: "distributor" })),
+      ...products.map((product) => ({
+        ...product.toObject(),
+        type: "product",
+      })),
+      ...brands.map((brand) => ({ ...brand.toObject(), type: "brand" })),
+      ...categories.map((category) => ({
+        ...category.toObject(),
+        type: "category",
+      })),
+      ...distributors.map((distributor) => ({
+        ...distributor.toObject(),
+        type: "distributor",
+      })),
     ];
 
     return res.status(200).json(resultWithTypes);
   } catch (err) {
     console.error("Error in Searching:", err);
-    return res.status(500).json({ message: "Internal Server Error", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error", error: err.message });
   }
 };
 
 exports.filterController = async (req, res, next) => {
-  console.log("filterController", req.params)
+  console.log("filterController", req.params);
   const { type, value, page, address } = req.query;
-
 
   try {
     let filteredResults;
-  
 
     switch (type) {
       case "brand":
@@ -523,14 +546,16 @@ exports.filterController = async (req, res, next) => {
         // Call getProductsGlobally for brand and category
         filteredResults = await getProductsGlobally(page, address, 50, type);
         break;
-        
+
       case "distributor":
         // Directly fetch products based on vendorId
         filteredResults = await Product.find({ vendorId: value });
         break;
-        
+
       default:
-        return res.status(400).json({ success: false, message: "Invalid filter type" });
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid filter type" });
     }
 
     return res.status(200).json({
@@ -546,7 +571,13 @@ exports.filterController = async (req, res, next) => {
     });
   } catch (err) {
     console.error("Error in Filtering:", err);
-    return res.status(500).json({ success: false, message: "Internal Server Error", error: err.message });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message: "Internal Server Error",
+        error: err.message,
+      });
   }
 };
 
@@ -597,14 +628,11 @@ exports.bulkCreate = async (req, res, next) => {
   }
 };
 
-
 exports.getTopRatedProducts = async (req, res, next) => {
   try {
     const page = parseInt(req.params.page) || 1; // Parse page as an integer and set default to 1
     const limit = 50;
     const skip = (page - 1) * limit;
-
-    
 
     const products = await Product.aggregate([
       {
@@ -639,6 +667,39 @@ exports.getTopRatedProducts = async (req, res, next) => {
   } catch (e) {
     console.error("Error in fetching top-rated products", e);
     res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+exports.distributors = async (req, res, next) => {
+  console.log('sending dist')
+  try {
+    const { address } = req.params;
+    if (!address) {
+      return res.status(400).json({ message: "Address is required" });
+    }
+
+    const vendors = await Distributor.find();
+    const distributors = [];
+
+    for (const ven of vendors) {
+      if (!ven.shopAddress || !ven?.radius || isNaN(ven?.radius)) continue;
+      const result = await calculateDistance(address, ven.shopAddress, ven._id, ven.radius);
+      
+      if (result && !result.error) {
+        console.log('sending distribut', ven._id)
+        distributors.push({
+          ID : ven._id,
+          Name : ven.name,
+          Shop_Name : ven.shopName,
+          Description : ven.description,
+          image : ven.image,
+        });
+      }
+    }
+
+    return res.json(distributors); 
+  } catch (e) {
+    next(e);
   }
 };
 

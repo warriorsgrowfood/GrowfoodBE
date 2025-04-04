@@ -3,6 +3,7 @@ const router = express.Router();
 const {getDistrict, getState} = require('../controller/activity/districts');
 const {createArea, getArea} = require('../controller/activity/area');
 const {getDistributors} = require('../controller/users/authController');
+const {distributors} = require('../controller/productController');
 
 
 
@@ -13,6 +14,6 @@ router.get('/states', getState);
 router.get('/districts/:state', getDistrict);
 router.get('/serviceArea/:city', getArea);
 router.post('/serviceArea', createArea);
-router.get('/distributors/:address', getDistributors)
+router.get('/distributors/:address', distributors);
 
 module.exports = router;

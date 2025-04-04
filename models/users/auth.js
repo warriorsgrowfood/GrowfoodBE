@@ -27,6 +27,9 @@ const authSchema = new mongoose.Schema({
     type: String,
     unique: true,
   },
+  description : {
+    type: String,
+  }, 
   password: {
     required: true,
     type: String,
