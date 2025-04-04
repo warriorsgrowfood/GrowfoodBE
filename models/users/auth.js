@@ -51,6 +51,9 @@ const authSchema = new mongoose.Schema({
   fcmToken : {
     type : String,
   },
+  radius : {
+    type: Number,
+  },
   chatters: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 

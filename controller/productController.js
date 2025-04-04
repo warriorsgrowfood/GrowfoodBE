@@ -3,32 +3,125 @@ const Brand = require("../models/products/brandSchema");
 const Category = require("../models/products/categories");
 const SubCategory = require("../models/products/SubCategory");
 const Unit = require("../models/products/unitSchema");
-const product = require("../models/products/product");
+const axios = require('axios');
 const Distributor = require("../models/users/auth");
-// Getting Products
-exports.getProducts = async (req, res, next) => {
+const User = require("../models/users/auth");
+
+
+
+
+
+
+async function calculateDistance(address1, address2, vendorId, radius) {
+  if (!address1 || !address2) return { error: "Missing origin or destination address" };
+  if (!vendorId || !radius || isNaN(radius)) return { error: "Invalid vendorId or radius" };
+
   try {
-    const { page } = req.params || 1; // Default to page 1
-    const limit = parseInt(req.query.limit) || 50; // Default to 50 products per page
-    const skip = (page - 1) * limit; // Calculate the number of items to skip
-
-    const products = await Product.find().skip(skip).limit(limit);
-    const totalProducts = await Product.countDocuments();
-
-    res.status(200).json({
-      success: true,
-      data: products,
-      pagination: {
-        total: totalProducts,
-        page,
-        limit,
-        totalPages: Math.ceil(totalProducts / limit),
-        hasNextPage: page * limit < totalProducts,
+    const response = await axios.get("https://maps.googleapis.com/maps/api/distancematrix/json", {
+      params: {
+        origins: address1,
+        destinations: address2,
+        key: "AIzaSyAi2MQyWnPyrSAY_jny04NPMKWoXZH5M1c", // TODO: Move to .env in production
+        units: "metric",
       },
     });
-  } catch (err) {
-    console.error(err);
-    next(err);
+
+    const data = response.data;
+    if (data.rows.length && data.rows[0].elements.length) {
+      const element = data.rows[0].elements[0];
+      if (element.status === "OK") {
+        const distanceValue = element.distance.value;
+        const radiusInMeters = Number(radius) * 1000;
+        return distanceValue <= radiusInMeters ? vendorId : null;
+      }
+      return { error: `Distance Matrix API error: ${element.status}` };
+    }
+    return { error: "No results found" };
+  } catch (error) {
+    return { error: `An error occurred: ${error.message}` };
+  }
+}
+
+exports.getProducts = async (req, res, next) => {
+  try {
+    const { page, address } = req.params;
+    
+    
+    if (!address) {
+      return res.status(400).json({
+        success: false,
+        message: "User address is required",
+      });
+    }
+    
+    const result = await getProductsGlobally(parseInt(page), address, 50);
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    next(error);
+    console.error("Error in getProducts:", error);
+  }
+};
+
+const getProductsGlobally = async (page, address, limit, filterBy) => {
+  try {
+    const vendors = await User.find({ userType: "Vendor" });
+    if (!vendors.length) {
+      return {
+        status: 404,
+        response: { success: false, message: "No vendors found" },
+      };
+    }
+
+    const nearbyVendorIds = [];
+    for (const vendor of vendors) {
+      if (!vendor.shopAddress || !vendor.radius || isNaN(vendor.radius)) continue;
+
+      const result = await calculateDistance(address, vendor.shopAddress, vendor._id, vendor.radius);
+      if (result && !result.error) nearbyVendorIds.push(result);
+    }
+
+    if (!nearbyVendorIds.length) {
+      return {
+        status: 200,
+        response: {
+          success: true,
+          data: [],
+          pagination: { total: 0, page, limit, totalPages: 0, hasNextPage: false },
+          message: "No nearby vendors found",
+        },
+      };
+    }
+
+    let productFilter = { vendorId: { $in: nearbyVendorIds } };
+    if (filterBy === "brand") productFilter.Brand = filterBy;
+    if (filterBy === "category") productFilter.Category = filterBy;
+
+    const filteredProducts = await Product.find(productFilter);
+    const totalFilteredProducts = filteredProducts.length;
+
+    const skip = (page - 1) * limit;
+    const paginatedProducts = filteredProducts.slice(skip, skip + limit);
+
+    return {
+      status: 200,
+      response: {
+        success: true,
+        data: paginatedProducts,
+        pagination: {
+          total: totalFilteredProducts,
+          page,
+          limit,
+          totalPages: Math.ceil(totalFilteredProducts / limit),
+          hasNextPage: page * limit < totalFilteredProducts,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("Error in getProductsGlobally:", error);
+    return {
+      status: 500,
+      response: { success: false, message: "Server error", error: error.message },
+    };
   }
 };
 
@@ -414,31 +507,49 @@ exports.searchController = async (req, res, next) => {
 };
 
 exports.filterController = async (req, res, next) => {
-  const { type, value } = req.query;
-  console.log(type, value);
+  console.log("filterController", req.params)
+  const { type, value, page, address } = req.query;
+
 
   try {
     let filteredResults;
+  
+
     switch (type) {
-      case 'brand':
-        filteredResults = await Product.find({ brand: value });
+      case "brand":
+        filteredResults = await getProductsGlobally(page, address, 50, type);
         break;
-      case 'category':
-        filteredResults = await Product.find({ categories: value });
+      case "category":
+        // Call getProductsGlobally for brand and category
+        filteredResults = await getProductsGlobally(page, address, 50, type);
         break;
-      case 'distributor':
-        filteredResults = await Product.find({ vendorId : value });
+        
+      case "distributor":
+        // Directly fetch products based on vendorId
+        filteredResults = await Product.find({ vendorId: value });
         break;
+        
       default:
-        return res.status(400).json({ message: "Invalid filter type" });
+        return res.status(400).json({ success: false, message: "Invalid filter type" });
     }
 
-    return res.status(200).json(filteredResults);
+    return res.status(200).json({
+      success: true,
+      data: filteredResults,
+      pagination: {
+        total: filteredResults.length,
+        page: parseInt(page) || 1,
+        limit: 50,
+        totalPages: Math.ceil(filteredResults.length / 50),
+        hasNextPage: filteredResults.length > page * 50,
+      },
+    });
   } catch (err) {
     console.error("Error in Filtering:", err);
-    return res.status(500).json({ message: "Internal Server Error", error: err.message });
+    return res.status(500).json({ success: false, message: "Internal Server Error", error: err.message });
   }
 };
+
 exports.categoriesProduct = async (req, res, next) => {
   const { category } = req.params;
 
@@ -492,6 +603,8 @@ exports.getTopRatedProducts = async (req, res, next) => {
     const page = parseInt(req.params.page) || 1; // Parse page as an integer and set default to 1
     const limit = 50;
     const skip = (page - 1) * limit;
+
+    
 
     const products = await Product.aggregate([
       {

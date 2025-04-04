@@ -149,7 +149,7 @@ exports.getOneUser = async (req, res, next) => {
 
 
 exports.createUser = async (req, res, next) => {
-  const {shopName, name, email, password, mobile, userType, shopAddress, gst, state, city, distributionAreas } = req.body;
+  const {shopName, name, email, password, mobile, userType, shopAddress, gst, state, city, distributionAreas, radius } = req.body;
   console.log(req.body);
   try {
     const existingUser = await User.findOne({ email });
@@ -159,7 +159,7 @@ exports.createUser = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({shopName, name, email, password: hashedPassword, mobile, shopAddress, gst, userType, state, city, distributionAreas});
+    const user = new User({shopName, name, email, password: hashedPassword, mobile, shopAddress, gst, userType, state, city, distributionAreas, radius});
     await user.save();
     const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, { expiresIn: '8760h' });
 
@@ -389,6 +389,8 @@ exports.getAllusers = async (req, res, next) => {
     next(err);
   }
 }
+
+
 
 exports.getDistributors = async (req, res, next) => {
   try {

@@ -13,6 +13,6 @@ router.get('/states', getState);
 router.get('/districts/:state', getDistrict);
 router.get('/serviceArea/:city', getArea);
 router.post('/serviceArea', createArea);
-router.get('/distributors', getDistributors)
+router.get('/distributors/:address', getDistributors)
 
 module.exports = router;

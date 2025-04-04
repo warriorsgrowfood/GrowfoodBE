@@ -82,6 +82,9 @@ const productSchema = mongoose.Schema({
 
         }],
         
+    },
+    address : {
+        type : String,
     }
 })
 
