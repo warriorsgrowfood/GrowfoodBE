@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 
+
 const {
   getProducts,
   createProduct,
@@ -22,7 +23,8 @@ const {
   getBrandsProduct,
   createUnit, getUnit, subProduct, CreateSubCategory, getSubCategory, categoriesProduct,
   filterController
-} = require("../controller/productController"); // Make sure the path is correct
+} = require("../controller/productController"); 
+
 
 
 // ---------------Products Routes --------------------

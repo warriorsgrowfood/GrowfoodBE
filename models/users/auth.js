@@ -1,64 +1,70 @@
 const mongoose = require('mongoose');
 
 const authSchema = new mongoose.Schema({
-  shopName : {
+  shopName: {
     required: true,
     type: String,
   },
-  shopAddress : {
+  shopAddress: {
     type: String,
   },
-  gst : {
+  gst: {
     type: String,
-  }, 
-  userType : {
-   type: String,
-
   },
-  userStatus : {
+  userType: {
+    type: String,
+    enum: ['User', 'Vendor'], // Restrict to User or Vendor
+    required: true,
+    default : 'User'
+  },
+  userStatus: {
     type: String,
   },
   name: {
     required: true,
-    type: String, 
+    type: String,
   },
   email: {
     required: true,
     type: String,
     unique: true,
   },
-  description : {
+  description: {
     type: String,
-  }, 
+  },
   password: {
     required: true,
     type: String,
-     
   },
   mobile: {
     required: true,
     type: String,
   },
-  image : {
+  image: {
     type: String,
   },
-  state : {
+  state: {
     type: String,
   },
-  city : {
+  city: {
     type: String,
   },
-  distributionAreas : {
+  distributionAreas: {
     type: [String],
   },
-  fcmToken : {
-    type : String,
+  fcmToken: {
+    type: String,
   },
-  radius : {
+  radius: {
     type: Number,
   },
-  chatters: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  chatters: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  vendors: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // New field for nearby vendors
 });
+
+// Indexes for performance
+authSchema.index({ vendors: 1 });
+authSchema.index({ userType: 1, shopAddress: 1 });
 
 const User = mongoose.model('User', authSchema);
 

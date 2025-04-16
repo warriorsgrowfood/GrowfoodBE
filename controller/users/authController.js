@@ -17,7 +17,6 @@ const SECRET_KEY = process.env.JWT_KEY;
 
 
 
-
 const sendEmail = async (to, subject, text) => {
   try {
     const transporter = nodemailer.createTransport({
@@ -148,25 +147,189 @@ exports.getOneUser = async (req, res, next) => {
 
 
 
-exports.createUser = async (req, res, next) => {
-  const {shopName, name, email, password, mobile, userType, shopAddress, gst, state, city, distributionAreas, radius } = req.body;
-  console.log(req.body);
+
+
+// Calculate distance using Google Maps API
+async function calculateDistance(address1, address2, id, radius) {
+  if (!address1 || !address2) {
+    return { error: 'Missing origin or destination address' };
+  }
+  if (!id || !radius || isNaN(radius)) {
+    return { error: 'Invalid ID or radius' };
+  }
+
   try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(409).send('Email already exists');
+    const response = await axios.get(
+      'https://maps.googleapis.com/maps/api/distancematrix/json',
+      {
+        params: {
+          origins: address1,
+          destinations: address2,
+          key: 'AIzaSyAi2MQyWnPyrSAY_jny04NPMKWoXZH5M1c', // TODO: Move to .env
+          units: 'metric',
+        },
+      }
+    );
+
+    const data = response.data;
+    if (data.rows.length && data.rows[0].elements.length) {
+      const element = data.rows[0].elements[0];
+      if (element.status === 'OK') {
+        const distanceValue = element.distance.value;
+        const radiusInMeters = Number(radius) * 1000;
+        return distanceValue <= radiusInMeters ? id : null;
+      }
+      return { error: `Distance Matrix API error: ${element.status}` };
+    }
+    return { error: 'No results found' };
+  } catch (error) {
+    return { error: `An error occurred: ${error.message}` };
+  }
+}
+
+// Helper: Find nearby vendors for a user
+async function findNearbyVendors(userAddress) {
+  try {
+    const vendors = await User.find({ userType: 'Vendor', shopAddress: { $ne: null }, radius: { $ne: null } });
+    const nearbyVendorIds = [];
+
+    for (const vendor of vendors) {
+      const result = await calculateDistance(
+        userAddress,
+        vendor.shopAddress,
+        vendor._id,
+        vendor.radius
+      );
+      if (result && !result.error) {
+        nearbyVendorIds.push(result);
+      }
     }
 
+    return nearbyVendorIds;
+  } catch (error) {
+    console.error('Error finding nearby vendors:', error);
+    return [];
+  }
+}
+
+// Helper: Update users within a vendor's radius
+async function updateUsersForVendor(vendorId, vendorAddress, vendorRadius) {
+  try {
+    const users = await User.find({ userType: 'User', shopAddress: { $ne: null } });
+
+    for (const user of users) {
+      const result = await calculateDistance(
+        user.shopAddress,
+        vendorAddress,
+        vendorId,
+        vendorRadius
+      );
+      if (result && !result.error) {
+        await User.findByIdAndUpdate(user._id, {
+          $addToSet: { vendors: vendorId }, // Avoid duplicates
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error updating users for vendor:', error);
+  }
+}
+
+// Updated createUser function
+exports.createUser = async (req, res, next) => {
+  const {
+    shopName,
+    name,
+    email,
+    password,
+    mobile,
+    userType,
+    shopAddress,
+    gst,
+    state,
+    city,
+    distributionAreas,
+    radius,
+  } = req.body;
+
+  try {
+    // Validate required fields
+    if (!name || !email || !password || !mobile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, password, mobile, and userType are required',
+      });
+    }
+
+    // Check for existing user
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: 'Email already exists',
+      });
+    }
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({shopName, name, email, password: hashedPassword, mobile, shopAddress, gst, userType, state, city, distributionAreas, radius});
-    await user.save();
-    const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, { expiresIn: '8760h' });
+    // Prepare user data
+    const userData = {
+      shopName: shopName || '',
+      name,
+      email,
+      password: hashedPassword,
+      mobile,
+      shopAddress,
+      gst,
+      userType,
+      state,
+      city,
+      distributionAreas: distributionAreas || [],
+      radius: userType === 'Vendor' ? radius : null,
+      vendors: [],
+    };
 
-    res.status(200).json({user, token});
+    const user = new User(userData);
+
+    // Handle user registration: Find nearby vendors
+    if (userType === 'User' && shopAddress) {
+      user.vendors = await findNearbyVendors(shopAddress);
+    }
+
+    // Save user
+    await user.save();
+
+    // Handle vendor registration: Update users within radius
+    if (userType === 'Vendor' && shopAddress && radius && !isNaN(radius)) {
+      await updateUsersForVendor(user._id, shopAddress, radius);
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, {
+      expiresIn: '8760h'});
+    // Return response
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user._id,
+        shopName: user.shopName,
+        name: user.name,
+        email: user.email,
+        mobile: user.mobile,
+        userType: user.userType,
+        shopAddress: user.shopAddress,
+        vendors: user.vendors,
+      },
+      token,
+    });
   } catch (error) {
     console.error('createUser error:', error);
-    next(error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message,
+    });
   }
 };
 
@@ -394,10 +557,7 @@ exports.getAllusers = async (req, res, next) => {
 
 exports.getDistributors = async (req, res, next) => {
   try {
-    // Fetch all vendors
     const distributors = await User.find({ userType: "Vendor" });
-
-    // Map through vendors and fetch product count for each vendor
     const distributorData = await Promise.all(
       distributors.map(async (vendor) => {
         const productCount = await Product.countDocuments({ vendorId: vendor._id });

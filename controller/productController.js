@@ -7,6 +7,8 @@ const axios = require("axios");
 const Distributor = require("../models/users/auth");
 const User = require("../models/users/auth");
 
+
+
 async function calculateDistance(address1, address2, vendorId, radius) {
   if (!address1 || !address2)
     return { error: "Missing origin or destination address" };
@@ -42,49 +44,98 @@ async function calculateDistance(address1, address2, vendorId, radius) {
   }
 }
 
-exports.getProducts = async (req, res, next) => {
-  try {
-    const { page, address } = req.params;
-
-    if (!address) {
-      return res.status(400).json({
-        success: false,
-        message: "User address is required",
-      });
-    }
-
-    const result = await getProductsGlobally(parseInt(page), address, 50);
-    res.status(result.status).json(result.response);
-  } catch (error) {
-    next(error);
-    console.error("Error in getProducts:", error);
-  }
-};
-
-const getProductsGlobally = async (page, address, limit, filterBy) => {
+// Helper function to update user.vendors
+async function updateUserVendors(userId, userAddress) {
   try {
     const vendors = await User.find({ userType: "Vendor" });
     if (!vendors.length) {
-      return {
-        status: 404,
-        response: { success: false, message: "No vendors found" },
-      };
+      await User.findByIdAndUpdate(userId, { $set: { vendors: [] } });
+      return { success: true, message: "No vendors found" };
     }
 
     const nearbyVendorIds = [];
     for (const vendor of vendors) {
-      if (!vendor.shopAddress || !vendor.radius || isNaN(vendor.radius))
-        continue;
+      if (!vendor.shopAddress || !vendor.radius || isNaN(vendor.radius)) continue;
 
       const result = await calculateDistance(
-        address,
+        userAddress,
         vendor.shopAddress,
         vendor._id,
         vendor.radius
       );
-      if (result && !result.error) nearbyVendorIds.push(result);
+      if (result && !result.error) {
+        nearbyVendorIds.push(result);
+      }
     }
 
+    await User.findByIdAndUpdate(userId, {
+      $set: { vendors: nearbyVendorIds },
+    });
+
+    return { success: true, message: "User vendors updated", nearbyVendorIds };
+  } catch (error) {
+    console.error("Error updating user vendors:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Endpoint to update user address and vendors
+exports.updateUserAddress = async (req, res, next) => {
+  const { userId, address } = req.body;
+
+  try {
+    if (!userId || !address) {
+      return res.status(400).json({ success: false, message: "User ID and address are required" });
+    }
+
+    await User.findByIdAndUpdate(userId, { $set: { address } });
+    const result = await updateUserVendors(userId, address);
+
+    res.status(200).json({
+      success: result.success,
+      message: result.message,
+      data: result.nearbyVendorIds || null,
+    });
+  } catch (error) {
+    console.error("Error updating address:", error);
+    next(error);
+  }
+};
+
+// Get products using user.vendors
+exports.getProducts = async (req, res, next) => {
+  try {
+    const { page = 1 } = req.params;
+    console.log(req.user)
+    const userId = (req.user._id).toString();
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+    
+    const result = await getProductsGlobally(parseInt(page), userId.toString(), 50);
+    console.log(result)
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    console.error("Error in getProducts:", error);
+    next(error);
+  }
+};
+
+const getProductsGlobally = async (page, userId, limit, filterBy = null) => {
+  try {
+    const user = await User.findById(userId).select("vendors");
+    if (!user) {
+      return {
+        status: 404,
+        response: { success: false, message: "User not found" },
+      };
+    }
+
+    const nearbyVendorIds = user.vendors || [];
     if (!nearbyVendorIds.length) {
       return {
         status: 200,
@@ -104,14 +155,18 @@ const getProductsGlobally = async (page, address, limit, filterBy) => {
     }
 
     let productFilter = { vendorId: { $in: nearbyVendorIds } };
-    if (filterBy === "brand") productFilter.Brand = filterBy;
-    if (filterBy === "category") productFilter.Category = filterBy;
+    if (filterBy && typeof filterBy === "string") {
+      if (filterBy.startsWith("brand:")) {
+        productFilter.brand = filterBy.replace("brand:", "");
+      } else if (filterBy.startsWith("category:")) {
+        productFilter.categories = filterBy.replace("category:", "");
+      }
+    }
 
-    const filteredProducts = await Product.find(productFilter);
-    const totalFilteredProducts = filteredProducts.length;
-
-    const skip = (page - 1) * limit;
-    const paginatedProducts = filteredProducts.slice(skip, skip + limit);
+    const totalFilteredProducts = await Product.countDocuments(productFilter);
+    const paginatedProducts = await Product.find(productFilter)
+      .skip((page - 1) * limit)
+      .limit(limit);
 
     return {
       status: 200,
@@ -159,6 +214,7 @@ exports.getProduct = async (req, res, next) => {
 
 exports.createProduct = async (req, res, next) => {
   const productData = req.body;
+  console.log('products details', productData)
 
   try {
     const existingBrand = await Brand.findOne({ name: productData.brand });
@@ -167,7 +223,6 @@ exports.createProduct = async (req, res, next) => {
       await newBrand.save();
     }
 
-    // Creating Categories
     const existingCategories = await Category.findOne({
       name: productData.categories,
     });
@@ -261,7 +316,7 @@ exports.getBrands = async (req, res, next) => {
     const brands = await Brand.find();
     const updatedBrands = brands.map((brand) => ({
       ...brand._doc,
-      icon: convertToHttps(brand.icon), // Convert the icon URL
+      icon: convertToHttps(brand.icon),
     }));
     res.status(200).json(updatedBrands);
   } catch (err) {
@@ -274,14 +329,14 @@ const convertToHttps = (url) => {
   if (typeof url === "string" && url.startsWith("http://")) {
     return url.replace("http://", "https://");
   }
-  return url; // Return original URL if it's already https or not a string
+  return url;
 };
 
 exports.getBrandsProduct = async (req, res) => {
   const { brand } = req.params;
 
   try {
-    const { page } = req.params || 1;
+    const { page = 1 } = req.params;
     const limit = 50;
     const skip = (page - 1) * limit;
     const products = await Product.find({ brand: brand })
@@ -531,43 +586,48 @@ exports.searchController = async (req, res, next) => {
   }
 };
 
+// Updated filterController to use user.vendors
 exports.filterController = async (req, res, next) => {
-  console.log("filterController", req.params);
-  const { type, value, page, address } = req.query;
+  const { type, value, page = 1, userId } = req.query;
 
   try {
     let filteredResults;
 
     switch (type) {
       case "brand":
-        filteredResults = await getProductsGlobally(page, address, 50, type);
+        filteredResults = await getProductsGlobally(page, userId, 50, `brand:${value}`);
         break;
       case "category":
-        // Call getProductsGlobally for brand and category
-        filteredResults = await getProductsGlobally(page, address, 50, type);
+        filteredResults = await getProductsGlobally(page, userId, 50, `category:${value}`);
         break;
-
       case "distributor":
-        // Directly fetch products based on vendorId
+        const user = await User.findById(userId).select("vendors");
+        if (!user || !user.vendors.includes(value)) {
+          return res.status(400).json({ success: false, message: "Invalid distributor" });
+        }
         filteredResults = await Product.find({ vendorId: value });
         break;
-
       default:
         return res
           .status(400)
           .json({ success: false, message: "Invalid filter type" });
     }
 
+    const data = filteredResults.response ? filteredResults.response.data : filteredResults;
+    const pagination = filteredResults.response
+      ? filteredResults.response.pagination
+      : {
+          total: filteredResults.length,
+          page: parseInt(page),
+          limit: 50,
+          totalPages: Math.ceil(filteredResults.length / 50),
+          hasNextPage: filteredResults.length > page * 50,
+        };
+
     return res.status(200).json({
       success: true,
-      data: filteredResults,
-      pagination: {
-        total: filteredResults.length,
-        page: parseInt(page) || 1,
-        limit: 50,
-        totalPages: Math.ceil(filteredResults.length / 50),
-        hasNextPage: filteredResults.length > page * 50,
-      },
+      data,
+      pagination,
     });
   } catch (err) {
     console.error("Error in Filtering:", err);
@@ -585,7 +645,7 @@ exports.categoriesProduct = async (req, res, next) => {
   const { category } = req.params;
 
   try {
-    const { page } = req.params || 1;
+    const { page = 1 } = req.params;
     const limit = 50;
     const skip = (page - 1) * limit;
     const products = await Product.find({ categories: category.toLowerCase() })
@@ -600,7 +660,7 @@ exports.categoriesProduct = async (req, res, next) => {
       pagination: {
         page,
         limit,
-        totalPages: Math.ceil(products.length / limit),
+        totalPages: Math.ceil(totalProducts / limit),
         total: totalProducts,
         hasNextPage: page * limit < totalProducts,
       },
@@ -618,7 +678,7 @@ exports.bulkCreate = async (req, res, next) => {
 
   try {
     if (formData?.length === 0) {
-      res.status(400).json({ message: "Atleast one product have to create." });
+      res.status(400).json({ message: "At least one product has to be created." });
     }
     await Product.insertMany(formData);
     res.status(200).json({ message: "Products successfully created" });
@@ -630,24 +690,24 @@ exports.bulkCreate = async (req, res, next) => {
 
 exports.getTopRatedProducts = async (req, res, next) => {
   try {
-    const page = parseInt(req.params.page) || 1; // Parse page as an integer and set default to 1
+    const page = parseInt(req.params.page) || 1;
     const limit = 50;
     const skip = (page - 1) * limit;
 
     const products = await Product.aggregate([
       {
         $addFields: {
-          totalRating: { $sum: "$rating.rating" }, // Calculate the total rating sum
+          totalRating: { $sum: "$rating.rating" },
         },
       },
       {
-        $sort: { totalRating: -1 }, // Sort by totalRating in descending order
+        $sort: { totalRating: -1 },
       },
       {
-        $skip: skip, // Skip documents for pagination
+        $skip: skip,
       },
       {
-        $limit: limit, // Limit the number of documents
+        $limit: limit,
       },
     ]);
 
@@ -670,36 +730,41 @@ exports.getTopRatedProducts = async (req, res, next) => {
   }
 };
 
+// Updated distributors to use user.vendors
 exports.distributors = async (req, res, next) => {
-  console.log('sending dist')
   try {
-    const { address } = req.params;
-    if (!address) {
-      return res.status(400).json({ message: "Address is required" });
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "User ID is required" });
     }
 
-    const vendors = await Distributor.find();
-    const distributors = [];
-
-    for (const ven of vendors) {
-      if (!ven.shopAddress || !ven?.radius || isNaN(ven?.radius)) continue;
-      const result = await calculateDistance(address, ven.shopAddress, ven._id, ven.radius);
-      
-      if (result && !result.error) {
-        console.log('sending distribut', ven._id)
-        distributors.push({
-          ID : ven._id,
-          Name : ven.name,
-          Shop_Name : ven.shopName,
-          Description : ven.description,
-          image : ven.image,
-        });
-      }
+    const user = await User.findById(userId).select("vendors");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    return res.json(distributors); 
-  } catch (e) {
-    next(e);
+    const nearbyVendorIds = user.vendors || [];
+    if (!nearbyVendorIds.length) {
+      return res.status(200).json([]);
+    }
+
+    const distributors = await User.find({
+      _id: { $in: nearbyVendorIds },
+      userType: "Vendor",
+    }).select("name shopName description image");
+
+    const formattedDistributors = distributors.map((ven) => ({
+      ID: ven._id,
+      Name: ven.name,
+      Shop_Name: ven.shopName,
+      Description: ven.description,
+      image: ven.image,
+    }));
+
+    return res.status(200).json(formattedDistributors);
+  } catch (error) {
+    console.error("Error in distributors:", error);
+    next(error);
   }
 };
-

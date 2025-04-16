@@ -10,6 +10,7 @@ const connectDb = require('./config/db')
 const vendorRoute = require('./routes/vendorRoutes')
 const activity = require('./routes/activityRoutes')
 const firebaseAdmin = require('firebase-admin');
+const verifyToken = require('./config/verification')
 
 require('dotenv').config();
 
@@ -45,9 +46,9 @@ app.use(bodyParser.urlencoded({limit : '5mb', extended : true}));
 connectDb();
 
 // Routes
-app.use('/api/products', productRoutes);  
+app.use('/api/products', verifyToken, productRoutes);  
 app.use('/api/users', auth)
-app.use('/api/orders', order)
+app.use('/api/orders', verifyToken, order)
 app.use('/api/admin', admin)
 app.use('/api/vendors', vendorRoute)
 app.use('/api/activity', activity)
