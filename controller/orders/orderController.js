@@ -15,14 +15,14 @@ exports.createOrder = async (req, res, next) => {
       timeZone: "Asia/Kolkata",
     });
     const bdata = req.body.formData; 
-    const orders = ({...bdata, date : istDate})
+    const orders = ({...bdata, date : istDate, userId : req.user._id});
     console.log('orders: ', orders);
 
     const newOrder = new Order(orders);
     await newOrder.save();
     const productIds = orders.productsArray.map(item => item.productId);
     await Cart.deleteMany({
-      userId : bdata.userId,
+      userId : req.user._id,
       productId : {$in : productIds},
     })
 
@@ -70,7 +70,8 @@ exports.updateOrder = async (req, res, next) => {
 };
 
 exports.createCart = async (req, res, next) => {
-  const { userId, productId, qty } = req.body;
+  const {productId, qty } = req.body;
+  const userId = req.user._id; 
   try {
     const cart = new Cart({ userId, productId, qty });
     await cart.save();
@@ -115,7 +116,7 @@ exports.deleteOrder = async (req, res, next) => {
 };
 
 exports.getOrders = async(req, res, next) => {
-  const { id } = req.params;
+  const id = req.user._id;
   try{
     const orders = await Order.find({userId : id});
     res.status(200).json(orders);
@@ -187,7 +188,7 @@ exports.getOrder = async (req, res, next) => {
 
 
 exports.getCart = async (req, res, next) => {
-  const { id } = req.params;
+  const  id  = req.user._id;
 
   try {
     const cart = await Cart.find({ userId: id });

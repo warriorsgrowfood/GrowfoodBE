@@ -51,7 +51,7 @@ app.use('/api/users', auth)
 app.use('/api/orders', verifyToken, order)
 app.use('/api/admin', admin)
 app.use('/api/vendors', vendorRoute)
-app.use('/api/activity', activity)
+app.use('/api/activity',verifyToken, activity)
 
 // Handling errors
 app.use(errorHandler);

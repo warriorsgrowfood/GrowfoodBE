@@ -2,7 +2,7 @@ require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const User = require('../../models/users/auth');
 const bcrypt = require('bcrypt');
-const Cart = require('../../models/orders/cart')
+const Cart = require('../../models/orders/cart');
 const Order = require('../../models/orders/orders');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -11,12 +11,11 @@ const Notification = require('../../models/activity/notification');
 const OtpModel = require('../../models/users/OtpModel');
 const Address = require('../../models/users/addressSchema');
 const Chat = require('../../models/users/chat');
+const axios = require('axios');
 
 const SECRET_KEY = process.env.JWT_KEY;
 
-
-
-
+// Send email for OTP
 const sendEmail = async (to, subject, text) => {
   try {
     const transporter = nodemailer.createTransport({
@@ -40,6 +39,106 @@ const sendEmail = async (to, subject, text) => {
     throw new Error('Error sending OTP email');
   }
 };
+
+// Calculate distance using Google Maps Distance Matrix API
+async function calculateDistance(origin, destination, id, radius) {
+  if (!origin || !destination) {
+    console.log('missing origin/destination')
+    return { error: 'Missing origin or destination address' };
+  }
+  if (!id || !radius || isNaN(radius)) {
+    console.log('invalid')
+    return { error: 'Invalid ID or radius' };
+  }
+
+  try {
+    const response = await axios.get(
+      'https://maps.googleapis.com/maps/api/distancematrix/json',
+      {
+        params: {
+          origins: origin,
+          destinations: destination,
+          key: 'AIzaSyAi2MQyWnPyrSAY_jny04NPMKWoXZH5M1c',
+          units: 'metric',
+        },
+      }
+    );
+
+    const data = response.data;
+    
+    if (data.rows.length && data.rows[0].elements.length) {
+      const element = data.rows[0].elements[0];
+      if (element.status === 'OK') {
+        const distanceValue = element.distance.value; // Distance in meters
+        const radiusInMeters = Number(radius) * 1000; // Convert radius to meters
+        return distanceValue <= radiusInMeters ? id : null;
+      }
+      return { error: `Distance Matrix API error: ${element.status}` };
+    }
+    return { error: 'No results found' };
+  } catch (error) {
+    console.error('Distance calculation error:', error.message);
+    return { error: `Distance calculation failed: ${error.message}` };
+  }
+}
+
+// Find nearby vendors for a user
+async function findNearbyVendors(userAddress) {
+  try {
+    const vendors = await User.find({
+      userType: 'Vendor',
+      shopAddress: { $ne: null },
+      radius: { $ne: null },
+    });
+
+    const nearbyVendorIds = [];
+    for (const vendor of vendors) {
+      
+      const result = await calculateDistance(
+        userAddress,
+        vendor.shopAddress,
+        vendor._id,
+        vendor.radius
+      );
+      if (result && !result.error) {
+        nearbyVendorIds.push(result);
+      }
+    }
+
+    return nearbyVendorIds.filter((id) => id !== null);
+  } catch (error) {
+    console.error('Error finding nearby vendors:', error);
+    return [];
+  }
+}
+
+// Update users within a vendor's radius
+async function updateUsersForVendor(vendorId, vendorAddress, vendorRadius) {
+  try {
+    const users = await User.find({
+      userType: 'User',
+      shopAddress: { $ne: null },
+    });
+
+    const updatePromises = users.map(async (user) => {
+      const result = await calculateDistance(
+        user.shopAddress,
+        vendorAddress,
+        vendorId,
+        vendorRadius
+      );
+      if (result && !result.error) {
+        await User.findByIdAndUpdate(user._id, {
+          $addToSet: { vendors: vendorId },
+        });
+      }
+    });
+
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.error('Error updating users for vendor:', error);
+  }
+}
 
 // Forgot Password - Generate and store OTP
 exports.forgotPassword = async (req, res, next) => {
@@ -75,7 +174,6 @@ exports.verifyOtp = async (req, res, next) => {
 
   try {
     const storedOtpRecord = await OtpModel.findOne({ email });
-    console.log(storedOtpRecord);
     if (!storedOtpRecord) return res.status(400).json({ message: 'No OTP found for this email' });
 
     // Check expiration
@@ -98,7 +196,7 @@ exports.verifyOtp = async (req, res, next) => {
   }
 };
 
-
+// Reset Password
 exports.resetPassword = async (req, res, next) => {
   const { email, newPassword } = req.body;
 
@@ -119,12 +217,13 @@ exports.resetPassword = async (req, res, next) => {
   }
 };
 
+// Get One User
 exports.getOneUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     const data = {
@@ -137,105 +236,12 @@ exports.getOneUser = async (req, res, next) => {
 
     res.status(200).json(data);
   } catch (e) {
-    console.error("Error in getting user", e);
-    res.status(500).json({ message: "Internal Server Error" });
+    console.error('Error in getting user', e);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 };
 
-
-
-
-
-
-
-
-// Calculate distance using Google Maps API
-async function calculateDistance(address1, address2, id, radius) {
-  if (!address1 || !address2) {
-    return { error: 'Missing origin or destination address' };
-  }
-  if (!id || !radius || isNaN(radius)) {
-    return { error: 'Invalid ID or radius' };
-  }
-
-  try {
-    const response = await axios.get(
-      'https://maps.googleapis.com/maps/api/distancematrix/json',
-      {
-        params: {
-          origins: address1,
-          destinations: address2,
-          key: 'AIzaSyAi2MQyWnPyrSAY_jny04NPMKWoXZH5M1c', // TODO: Move to .env
-          units: 'metric',
-        },
-      }
-    );
-
-    const data = response.data;
-    if (data.rows.length && data.rows[0].elements.length) {
-      const element = data.rows[0].elements[0];
-      if (element.status === 'OK') {
-        const distanceValue = element.distance.value;
-        const radiusInMeters = Number(radius) * 1000;
-        return distanceValue <= radiusInMeters ? id : null;
-      }
-      return { error: `Distance Matrix API error: ${element.status}` };
-    }
-    return { error: 'No results found' };
-  } catch (error) {
-    return { error: `An error occurred: ${error.message}` };
-  }
-}
-
-// Helper: Find nearby vendors for a user
-async function findNearbyVendors(userAddress) {
-  try {
-    const vendors = await User.find({ userType: 'Vendor', shopAddress: { $ne: null }, radius: { $ne: null } });
-    const nearbyVendorIds = [];
-
-    for (const vendor of vendors) {
-      const result = await calculateDistance(
-        userAddress,
-        vendor.shopAddress,
-        vendor._id,
-        vendor.radius
-      );
-      if (result && !result.error) {
-        nearbyVendorIds.push(result);
-      }
-    }
-
-    return nearbyVendorIds;
-  } catch (error) {
-    console.error('Error finding nearby vendors:', error);
-    return [];
-  }
-}
-
-// Helper: Update users within a vendor's radius
-async function updateUsersForVendor(vendorId, vendorAddress, vendorRadius) {
-  try {
-    const users = await User.find({ userType: 'User', shopAddress: { $ne: null } });
-
-    for (const user of users) {
-      const result = await calculateDistance(
-        user.shopAddress,
-        vendorAddress,
-        vendorId,
-        vendorRadius
-      );
-      if (result && !result.error) {
-        await User.findByIdAndUpdate(user._id, {
-          $addToSet: { vendors: vendorId }, // Avoid duplicates
-        });
-      }
-    }
-  } catch (error) {
-    console.error('Error updating users for vendor:', error);
-  }
-}
-
-// Updated createUser function
+// Create User
 exports.createUser = async (req, res, next) => {
   const {
     shopName,
@@ -254,7 +260,8 @@ exports.createUser = async (req, res, next) => {
 
   try {
     // Validate required fields
-    if (!name || !email || !password || !mobile) {
+    if (!name || !email || !password || !mobile ) {
+
       return res.status(400).json({
         success: false,
         message: 'Name, email, password, mobile, and userType are required',
@@ -293,9 +300,10 @@ exports.createUser = async (req, res, next) => {
     const user = new User(userData);
 
     // Handle user registration: Find nearby vendors
-    if (userType === 'User' && shopAddress) {
+    if (userType !== 'Vendor' && shopAddress) {
       user.vendors = await findNearbyVendors(shopAddress);
     }
+   
 
     // Save user
     await user.save();
@@ -307,7 +315,9 @@ exports.createUser = async (req, res, next) => {
 
     // Generate JWT token
     const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, {
-      expiresIn: '8760h'});
+      expiresIn: '8760h',
+    });
+
     // Return response
     res.status(200).json({
       success: true,
@@ -333,56 +343,47 @@ exports.createUser = async (req, res, next) => {
   }
 };
 
+// Update User
 exports.updateUser = async (req, res, next) => {
   const { id } = req.params;
-  const { shopName, name, mobile, image, gst, userType, userStatus, shopAddress} = req.body.formData;
-
-
+  const { shopName, name, mobile, image, gst, userType, userStatus, shopAddress } = req.body.formData;
 
   try {
-    
- 
     const updateData = {};
     if (shopName) updateData.shopName = shopName;
     if (name) updateData.name = name;
     if (mobile) updateData.mobile = mobile;
-    if(image) updateData.image = image;
-    if(gst) updateData.gst = gst;
-    if(userType) updateData.userType = userType;
-    if(userStatus) updateData.userStatus = userStatus;
-    if(shopAddress) updateData.shopAddress = shopAddress;
+    if (image) updateData.image = image;
+    if (gst) updateData.gst = gst;
+    if (userType) updateData.userType = userType;
+    if (userStatus) updateData.userStatus = userStatus;
+    if (shopAddress) updateData.shopAddress = shopAddress;
 
-    
-    const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
-  
+    const updatedUser = await User.findByIdAndUpdate(id, updateData, {琉: true });
+
     if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    res.status(200).json({ message: "User updated successfully", user: updatedUser });
+    res.status(200).json({ message: 'User updated successfully', user: updatedUser });
   } catch (e) {
     console.error(e);
     next(e);
   }
 };
 
-
-
-
+// Login User
 exports.loginUser = async (req, res, next) => {
   const { email, password } = req.body;
- 
 
   try {
     const user = await User.findOne({ email });
     if (!user) {
-
       return res.status(404).send('User not found');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-
       return res.status(401).send('Invalid Password');
     }
 
@@ -395,11 +396,12 @@ exports.loginUser = async (req, res, next) => {
   }
 };
 
+// Get User
 exports.getUser = async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    const user = await User.findOne({ _id : id });
+    const user = await User.findOne({ _id: id });
     if (!user) {
       return res.status(404).send('User not found');
     }
@@ -410,9 +412,10 @@ exports.getUser = async (req, res, next) => {
   }
 };
 
+// Get All Users
 exports.getUsers = async (req, res, next) => {
   const message = req.params.message;
-  if (message === "AdminAccess") {
+  if (message === 'AdminAccess') {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
@@ -425,97 +428,93 @@ exports.getUsers = async (req, res, next) => {
   }
 };
 
+// Get Current User
 exports.getCurrentUser = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).select('-password'); 
+    const user = await User.findById(req.user.id).select('-password');
 
     if (!user) {
       return res.status(404).send('User not found');
     }
-    const cartCount = await Cart.find({userId : user._id});
-    const orderCount = await Order.find({userId : user._id});
+    const cartCount = await Cart.find({ userId: user._id });
+    const orderCount = await Order.find({ userId: user._id });
     const cartLength = cartCount.length;
     const orderLength = orderCount.length;
-    const data = {user, cartLength, orderLength};
+    const data = { user, cartLength, orderLength };
 
-    
     res.status(200).json(data);
-    
   } catch (error) {
     console.error('Get User error:', error);
     res.status(500).send('Server error');
   }
 };
 
-
-exports.createAddress = async(req, res, next) => {
-  
-  try{
+// Create Address
+exports.createAddress = async (req, res, next) => {
+  try {
     const formData = req.body;
     const address = formData;
 
-    const newAdddress = new Address({
-      userId : address.userId,
-      name : address.name,
-      mobile : address.mobile,
-      locality : address.locality,
-      city : address.city,
-      state : address.state,
-      zip : address.zip,
-      landMark : address.landmark
+    const newAddress = new Address({
+      userId: address.userId,
+      name: address.name,
+      mobile: address.mobile,
+      locality: address.locality,
+      city: address.city,
+      state: address.state,
+      zip: address.zip,
+      landMark: address.landmark,
     });
 
-    await newAdddress.save();
-    res.status(200).json({message: 'Address saved'});
-  }catch(err){
+    await newAddress.save();
+    res.status(200).json({ message: 'Address saved' });
+  } catch (err) {
     console.error(err);
     next(err);
   }
 };
 
+// Get Address
 exports.getAddress = async (req, res, next) => {
- 
   try {
-    const {id} = req.params;
-    console.log('id is', id)
-    const addresses = await Address.find({userId: id});
-    console.log('address is', addresses)
-    if(addresses){
+    const id= req.user._id;
+    const addresses = await Address.find({ userId: id });
+
+    if (addresses.length) {
       res.status(200).json(addresses);
-    }else{
-      res.status(402).json({message: 'Address not found'});
+    } else {
+      res.status(404).json({ message: 'Address not found' });
     }
-    
   } catch (error) {
     console.error('getAddress error:', error);
     next(error);
   }
 };
 
+// Get Delivery Address
 exports.getDeliveryAddress = async (req, res, next) => {
-  
   try {
-    const {id} = req.params;
+    const id = req.params.id;
+    const address = await Address.findById(id);
 
-    const addresses = await Address.findById(id);
-    if(addresses){
-
-      res.status(200).json(addresses);
-    }else{
-      res.status(402).json({message: 'Address not found'});
+    if (address) {
+      res.status(200).json(address);
+    } else {
+      res.status(404).json({ message: 'Address not found' });
     }
-    
   } catch (error) {
     console.error('getAddress error:', error);
     next(error);
   }
 };
 
+// Update Address
 exports.updateAddress = async (req, res, next) => {
   try {
     const { addressId } = req.params;
     const updatedData = req.body.address;
     const updatedAddress = await Address.findByIdAndUpdate(addressId, updatedData, { new: true });
+
     if (!updatedAddress) {
       return res.status(404).send('Address not found');
     }
@@ -526,11 +525,12 @@ exports.updateAddress = async (req, res, next) => {
   }
 };
 
+// Delete Address
 exports.deleteAddress = async (req, res, next) => {
   try {
-    const addressId  = req.params.id;
-  
+    const addressId = req.params.id;
     const deletedAddress = await Address.findByIdAndDelete(addressId);
+
     if (!deletedAddress) {
       return res.status(404).send('Address not found');
     }
@@ -541,28 +541,26 @@ exports.deleteAddress = async (req, res, next) => {
   }
 };
 
-
-exports.getAllusers = async (req, res, next) => { 
-
-  try{
+// Get All Users
+exports.getAllusers = async (req, res, next) => {
+  try {
     const users = await User.find({});
     res.status(200).json(users);
-  }catch (err) {
+  } catch (err) {
     console.error(err);
     next(err);
   }
-}
+};
 
-
-
+// Get Distributors
 exports.getDistributors = async (req, res, next) => {
   try {
-    const distributors = await User.find({ userType: "Vendor" });
+    const distributors = await User.find({ userType: 'Vendor' });
     const distributorData = await Promise.all(
       distributors.map(async (vendor) => {
         const productCount = await Product.countDocuments({ vendorId: vendor._id });
         return {
-          id : vendor._id,
+          id: vendor._id,
           name: vendor.name,
           city: vendor.city,
           area: vendor.distributionAreas,
@@ -571,7 +569,6 @@ exports.getDistributors = async (req, res, next) => {
       })
     );
 
-    // Send the response
     res.status(200).json(distributorData);
   } catch (err) {
     console.error(err);
@@ -579,49 +576,46 @@ exports.getDistributors = async (req, res, next) => {
   }
 };
 
-
+// Get Chatters
 exports.chatters = async (req, res, next) => {
   const { id } = req.params;
 
   try {
-    // Find the user
     const user = await User.findById(id).populate('chatters', 'id name image userStatus');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Fetch the admin user
     const superUser = await User.findOne({ userType: 'admin' }).select('id name image userStatus');
 
     res.status(200).json({
-      chatters: user.chatters.map(chatter => ({
+      chatters: user.chatters.map((chatter) => ({
         id: chatter._id,
         name: chatter.name,
         image: chatter.image,
-        isActive: chatter.userStatus === 'active' // Assuming 'userStatus' represents activity
+        isActive: chatter.userStatus === 'active',
       })),
-      admin: superUser ? {
-        id: superUser._id,
-        name: superUser.name,
-        image: superUser.image,
-        isActive: superUser.userStatus === 'active'
-      } : null
+      admin: superUser
+        ? {
+            id: superUser._id,
+            name: superUser.name,
+            image: superUser.image,
+            isActive: superUser.userStatus === 'active',
+          }
+        : null,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 };
 
-
-
-
+// Send Message
 async function sendMessage(senderId, receiverId, messageText) {
   try {
     let chat = await Chat.findOne({
-      participants: { $all: [senderId, receiverId] }
+      participants: { $all: [senderId, receiverId] },
     });
 
     if (!chat) {
@@ -630,7 +624,7 @@ async function sendMessage(senderId, receiverId, messageText) {
 
     chat.messages.push({
       sender: senderId,
-      message: messageText
+      message: messageText,
     });
 
     await chat.save();
@@ -640,78 +634,78 @@ async function sendMessage(senderId, receiverId, messageText) {
   }
 }
 
-exports.updateFcm = async(req, res, next)=>{
-  const {fcmToken, userId} = req.body;
-  try{
-    const user = await User.findByIdAndUpdate(userId, {fcmToken : fcmToken}, {new : true});
-    return res.status(200).json({message : 'Token Updated'})
-  }catch(e){
-    console.error('Error in updating fcm token', e)
-    next(e);
-  }
-}
-
-exports.getNotification = async(req, res, next) => {
-  try{
-    const notifications = await Notification.find({userId: req.params.id});
-    res.status(200).json(notifications);
-  }catch(e){
-    console.error('Error in getting notification', e)
+// Update FCM Token
+exports.updateFcm = async (req, res, next) => {
+  const { fcmToken } = req.body;
+  try {
+    await User.findByIdAndUpdate(req.user._id, { fcmToken }, { new: true });
+    return res.status(200).json({ message: 'Token Updated' });
+  } catch (e) {
+    console.error('Error in updating fcm token', e);
     next(e);
   }
 };
 
+// Get Notifications
+exports.getNotification = async (req, res, next) => {
+  console.log('gettting notification')
+  try {
+    const notifications = await Notification.find({ userId: req.user._id });
+    res.status(200).json(notifications);
+  } catch (e) {
+    console.error('Error in getting notification', e);
+    next(e);
+  }
+};
+
+// Update Notification Seen
 exports.updateNotiSeen = async (req, res, next) => {
   try {
     const { userId } = req.body;
-    console.log('user is ', userId);
 
-     await Notification.updateMany(
-      { userId: userId, isSeen: false }, 
-      { $set: { isSeen: true } }         
+    await Notification.updateMany(
+      { userId, isSeen: false },
+      { $set: { isSeen: true } }
     );
 
-    return res.status(200).json({ success: true, message: 'Notifications updated',  });
+    return res.status(200).json({ success: true, message: 'Notifications updated' });
   } catch (e) {
     console.error('Error in updating notification', e);
     next(e);
   }
 };
 
-exports.createChat = async(req, res, next) => {
-  try{
-    console.log('request body is ', req.body)
-    const neChat = new Chat(req.body);
-    await neChat.save();
-    console.log('chat saved')
-    return res.status(200).json({message : neChat})
-  }catch(e){
-    console.error('Error in creating chat', e)
+// Create Chat
+exports.createChat = async (req, res, next) => {
+  try {
+    const newChat = new Chat(req.body);
+    await newChat.save();
+    return res.status(200).json({ message: newChat });
+  } catch (e) {
+    console.error('Error in creating chat', e);
     next(e);
   }
 };
 
+// Get Chats
 exports.getChats = async (req, res, next) => {
   const id = req.params.id;
-  try{
-    console.log('id i s', id);
-    const chats = await Chat.find({sender : id})
-  
-    console.log('chats have', chats)
+  try {
+    const chats = await Chat.find({ sender: id });
     res.status(200).json(chats);
-  }catch(e){
-    console.error('Eror in getting', e)
-    next(e); 
+  } catch (e) {
+    console.error('Error in getting chats', e);
+    next(e);
   }
 };
 
-exports.getChatsAdmin = async(req, res, next)=>{
-  try{
+// Get Chats for Admin
+exports.getChatsAdmin = async (req, res, next) => {
+  try {
     const chats = await Chat.find();
     return res.status(200).json(chats);
-  }catch(e){
-    console.error('Error in getting', e)
+  } catch (e) {
+    console.error('Error in getting chats', e);
     next(e);
   }
-}
-
+};

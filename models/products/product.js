@@ -1,91 +1,94 @@
 const mongoose = require('mongoose');
 
 const productSchema = mongoose.Schema({
-    vendorId : {
-        type : String,
+    vendorId: {
+        type: String,
     },
-    name : {
-        rquired: true,
-        type : String,
+    name: {
+        required: true,
+        type: String,
     },
-    description : {
-        rquired: true,
-        type : String,
+    description: {
+        type: String,
     },
-    brand : {
-        type : String,
+    gst: {
+        type: String,
+    },
+    gstInclusive: {
+        type: Boolean,
+        default: true,
+    },
+    brand: {
+        type: String,
         required: true,
     },
-    categories : {
-        type : String,
+    categories: {
+        type: String,
         required: true,
     },
-    display : {
-        type : Boolean,
+    display: {
+        type: Boolean,
     },
-    subCategory : {
-        type : String,
+    subCategory: {
+        type: String,
     },
-    image : {
-        type : [],
+    image: {
+        type: [],
     },
-    discountType : {
-
-        type : String,
+    discountType: {
+        type: String,
     },
-    discount : {
-        type : Number,
-
+    discount: {
+        type: Number,
     },
-    
-    price : {
-        type : Number,
-
+    price: {
+        type: Number,
     },
-    sellingPrice : {
-        type : Number,
+    sellingPrice: {
+        type: Number,
         required: true,
     },
-    unit : {
-        type : String,
-
+    unit: {
+        type: String,
     },
-    productQty : {
-
-        type : String,
+    productQty: {
+        type: String,
     },
-    incDecBy : {
- 
-        type : Number,
+    incDecBy: {
+        type: Number,
     },
-
-    minimumOrderQty : {
-        type : Number,
-        default : 1,
+    minimumOrderQty: {
+        type: Number,
+        default: 1,
     },
-    availableQty : {
-
-        type : Number,
+    availableQty: {
+        type: Number,
     },
-    foodPrefence : {
-        type : String,
+    foodPrefence: {
+        type: String,
     },
-    life : {
-        type : String,
+    life: {
+        type: String,
     },
-    rating : {
-        type : [{
-            userId : String,
-            rating : Number,
-            review : String,
+    rating: {
+        type: [{
+            userId: String,
+            rating: Number,
+            review: String,
             date: { type: Date, default: Date.now }
-
         }],
-        
     },
-    address : {
-        type : String,
+    address: {
+        type: String,
     }
-})
+});
+
+// 🔁 Auto-sync incDecBy to minimumOrderQty if not provided
+productSchema.pre('save', function (next) {
+    if (this.incDecBy && !this.minimumOrderQty) {
+        this.minimumOrderQty = this.incDecBy;
+    }
+    next();
+});
 
 module.exports = mongoose.model('Product', productSchema);

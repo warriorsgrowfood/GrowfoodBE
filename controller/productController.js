@@ -104,21 +104,29 @@ exports.updateUserAddress = async (req, res, next) => {
 
 // Get products using user.vendors
 exports.getProducts = async (req, res, next) => {
+  
   try {
     const { page = 1 } = req.params;
-    console.log(req.user)
-    const userId = (req.user._id).toString();
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required",
-      });
+    const skip = (page-1)*50;
+    if(req.user.vendors.length<=0){
+      return res.status(408).json({message : 'No any nearby vendors'})
     }
     
-    const result = await getProductsGlobally(parseInt(page), userId.toString(), 50);
-    console.log(result)
-    res.status(result.status).json(result.response);
+    const [total, products] = await Promise.all([
+      Product.countDocuments({ vendorId: { $in: req.user.vendors } }),
+      Product.find({ vendorId: { $in: req.user.vendors } })
+        .skip(skip)
+        .limit(50)
+        .sort({ createdAt: -1 }) // optional: newest first
+    ]);
+    console.log(products)
+    res.status(200).json({
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / 50),
+      products,
+    });
+   
   } catch (error) {
     console.error("Error in getProducts:", error);
     next(error);
@@ -214,7 +222,7 @@ exports.getProduct = async (req, res, next) => {
 
 exports.createProduct = async (req, res, next) => {
   const productData = req.body;
-  console.log('products details', productData)
+ 
 
   try {
     const existingBrand = await Brand.findOne({ name: productData.brand });
@@ -674,12 +682,28 @@ exports.categoriesProduct = async (req, res, next) => {
 };
 
 exports.bulkCreate = async (req, res, next) => {
-  const { formData } = req.body;
+  const formData = req.body.formData;
+
+  if (!Array.isArray(formData) || formData.length === 0) {
+    return res.status(400).json({ message: "At least one product has to be created." });
+  }
 
   try {
-    if (formData?.length === 0) {
-      res.status(400).json({ message: "At least one product has to be created." });
+    // Validate each product using the Product model
+    for (let i = 0; i < formData.length; i++) {
+      const product = new Product(formData[i]);
+      const error = product.validateSync();
+      if (error) {
+        console.error("Invalid product at index", i, "->", formData[i]);
+        return res.status(400).json({
+          message: `Validation failed for product at index ${i}`,
+          errors: error.errors,
+          product: formData[i],
+        });
+      }
     }
+
+    // All products are valid at this point
     await Product.insertMany(formData);
     res.status(200).json({ message: "Products successfully created" });
   } catch (err) {
@@ -688,13 +712,25 @@ exports.bulkCreate = async (req, res, next) => {
   }
 };
 
+
 exports.getTopRatedProducts = async (req, res, next) => {
   try {
-    const page = parseInt(req.params.page) || 1;
+    const page = parseInt(req.query.page) || 1;
     const limit = 50;
     const skip = (page - 1) * limit;
 
+    // Validate user.vendors
+    if (!req.user?.vendors || !Array.isArray(req.user.vendors)) {
+      return res.status(400).json({ message: "Invalid or missing vendor list in user." });
+    }
+
+    // Aggregate with vendorId filter
     const products = await Product.aggregate([
+      {
+        $match: {
+          vendorId: { $in: req.user.vendors },
+        },
+      },
       {
         $addFields: {
           totalRating: { $sum: "$rating.rating" },
@@ -703,22 +739,20 @@ exports.getTopRatedProducts = async (req, res, next) => {
       {
         $sort: { totalRating: -1 },
       },
-      {
-        $skip: skip,
-      },
-      {
-        $limit: limit,
-      },
+      { $skip: skip },
+      { $limit: 50 },
     ]);
 
-    const totalProducts = await Product.countDocuments();
+    const totalProducts = await Product.countDocuments({
+      vendorId: { $in: req.user.vendors },
+    });
 
     res.status(200).json({
       success: true,
       data: products,
       pagination: {
         page,
-        limit,
+       
         totalPages: Math.ceil(totalProducts / limit),
         total: totalProducts,
         hasNextPage: page * limit < totalProducts,
@@ -733,38 +767,29 @@ exports.getTopRatedProducts = async (req, res, next) => {
 // Updated distributors to use user.vendors
 exports.distributors = async (req, res, next) => {
   try {
-    const { userId } = req.params;
 
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "User ID is required" });
-    }
+    const distributors = await User.aggregate([
+      {
+        $match: {
+          _id: { $in: req.user.vendors}, // convert to ObjectId if needed
+          userType: "Vendor",
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          Name: "$name",
+          Shop_Name: "$shopName",
+          Description: "$description",
+          image: 1,
+        },
+      },
+    ]);
 
-    const user = await User.findById(userId).select("vendors");
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    const nearbyVendorIds = user.vendors || [];
-    if (!nearbyVendorIds.length) {
-      return res.status(200).json([]);
-    }
-
-    const distributors = await User.find({
-      _id: { $in: nearbyVendorIds },
-      userType: "Vendor",
-    }).select("name shopName description image");
-
-    const formattedDistributors = distributors.map((ven) => ({
-      ID: ven._id,
-      Name: ven.name,
-      Shop_Name: ven.shopName,
-      Description: ven.description,
-      image: ven.image,
-    }));
-
-    return res.status(200).json(formattedDistributors);
+    res.status(200).json(distributors);
   } catch (error) {
     console.error("Error in distributors:", error);
     next(error);
   }
 };
+

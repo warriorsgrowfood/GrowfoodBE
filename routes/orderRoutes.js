@@ -6,12 +6,12 @@ const {createOrder, getOrder, getOrders, adminOrders, createCart, deleteCart, ge
 
 
 router.post('/createCart', createCart);
-router.get('/getCart/:id', getCart);    
+router.get('/getCart', getCart);    
 router.delete('/deleteCart/:id', deleteCart);
 
 router.post('/create', createOrder);
 router.get('/getOrder/:id', getOrder);
-router.get('/getOrders/:id', getOrders);
+router.get('/getOrders', getOrders);
 router.delete('/deleteOrder/:id', deleteOrder);
 router.put('/updateOrder/:id', updateOrder);
 
