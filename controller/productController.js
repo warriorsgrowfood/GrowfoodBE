@@ -6,6 +6,7 @@ const Unit = require("../models/products/unitSchema");
 const axios = require("axios");
 const Distributor = require("../models/users/auth");
 const User = require("../models/users/auth");
+const mongoose = require("mongoose");
 
 
 
@@ -119,7 +120,7 @@ exports.getProducts = async (req, res, next) => {
         .limit(50)
         .sort({ createdAt: -1 }) // optional: newest first
     ]);
-    console.log(products)
+   
     res.status(200).json({
       total,
       page: Number(page),
@@ -312,7 +313,7 @@ exports.deleteProduct = async (req, res, next) => {
       res.status(404).json({ message: "Product not found" });
     }
   } catch (err) {
-    console.log(err);
+    console.error(err);
     res.status(500);
     next(err);
   }
@@ -420,7 +421,7 @@ exports.deleteBrand = async (req, res, next) => {
       res.status(404).json({ message: "Brand not found" });
     }
   } catch (err) {
-    console.log(err);
+    console.error(err);
     next(err);
   }
 };
@@ -472,7 +473,7 @@ exports.updateCategory = async (req, res, next) => {
       res.status(404).json({ message: "Category not found" });
     }
   } catch (err) {
-    console.log("Error updating category", err);
+    console.error("Error updating category", err);
     next(err);
   }
 };
@@ -487,7 +488,7 @@ exports.deleteCategory = async (req, res, next) => {
       res.status(404).json({ message: "Error deleting category" });
     }
   } catch (err) {
-    console.log("Error deleting category", err);
+    console.error("Error deleting category", err);
     next(err);
   }
 };
@@ -498,7 +499,7 @@ exports.createUnit = async (req, res, next) => {
     await unit.save();
     res.status(200).json({ message: "Unit saved successfully" });
   } catch (err) {
-    console.log("Error creating unit", err);
+    console.error("Error creating unit", err);
     next(err);
   }
 };
@@ -508,7 +509,7 @@ exports.getUnit = async (req, res, next) => {
     const units = await Unit.find();
     res.status(200).json(units);
   } catch (err) {
-    console.log("Error getting", err);
+    console.error("Error getting", err);
     next(err);
   }
 };
@@ -524,7 +525,7 @@ exports.CreateSubCategory = async (req, res, next) => {
     await item.save();
     res.status(200).json(item);
   } catch (err) {
-    console.log("Error getting", err);
+    console.error("Error getting", err);
     next(err);
   }
 };
@@ -534,7 +535,7 @@ exports.getSubCategory = async (req, res, next) => {
     const subCategory = await SubCategory.find({});
     res.status(200).json(subCategory);
   } catch (err) {
-    console.log("Error getting", err);
+    console.error("Error getting", err);
     next(err);
   }
 };
@@ -596,7 +597,8 @@ exports.searchController = async (req, res, next) => {
 
 // Updated filterController to use user.vendors
 exports.filterController = async (req, res, next) => {
-  const { type, value, page = 1, userId } = req.query;
+  const { type, value, page = 1 } = req.query;
+  const userId = req.user._id;
 
   try {
     let filteredResults;
@@ -713,46 +715,75 @@ exports.bulkCreate = async (req, res, next) => {
 };
 
 
+
+
 exports.getTopRatedProducts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = 50;
+    const limit = 20;  // Limiting the result to 20 products
     const skip = (page - 1) * limit;
+    console.log("Vendors: ", req.user.vendors);
 
-    // Validate user.vendors
-    if (!req.user?.vendors || !Array.isArray(req.user.vendors)) {
-      return res.status(400).json({ message: "Invalid or missing vendor list in user." });
-    }
+    const vendorsObjectIds = req.user.vendors.map(id => id.toString()); // Ensure vendorsObjectIds are strings
+    console.log("Vendors Object IDs: ", vendorsObjectIds);
 
-    // Aggregate with vendorId filter
-    const products = await Product.aggregate([
+    // Aggregation query to get top-rated products with all product details
+    const aggregatedProducts = await Product.aggregate([
       {
         $match: {
-          vendorId: { $in: req.user.vendors },
+          vendorId: { $in: vendorsObjectIds }, // Match products with the given vendorIds
         },
       },
       {
-        $addFields: {
-          totalRating: { $sum: "$rating.rating" },
+        $unwind: {
+          path: "$rating", // Unwind the rating array
+          preserveNullAndEmptyArrays: true, // Keep products with no ratings
         },
       },
       {
-        $sort: { totalRating: -1 },
+        $group: {
+          _id: "$_id", // Group by the product _id
+          name: { $first: "$name" },
+          vendorId: { $first: "$vendorId" },
+          totalRating: { $sum: "$rating.rating" }, // Sum up the ratings for this product
+          ratingCount: { $sum: 1 }, // Count how many ratings this product has
+          allDetails: { $first: "$$ROOT" }, // Keep all product details
+        },
+      },
+      {
+        $sort: { totalRating: -1 }, // Sort products by totalRating in descending order
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          vendorId: 1,
+          totalRating: 1,
+          ratingCount: 1,
+          allDetails: 1, // Include all details from the original product document
+        },
       },
       { $skip: skip },
-      { $limit: 50 },
+      { $limit: limit },
     ]);
+    console.log("Aggregated Products: ", aggregatedProducts);
 
+    // Count the total number of products matching the criteria
     const totalProducts = await Product.countDocuments({
-      vendorId: { $in: req.user.vendors },
+      vendorId: { $in: vendorsObjectIds },
     });
+    console.log("Total Products: ", totalProducts);
 
+    // Send response
     res.status(200).json({
       success: true,
-      data: products,
+      data: aggregatedProducts.map(product => ({
+        ...product.allDetails, // Spread all the original product fields
+        totalRating: product.totalRating, // Include totalRating and ratingCount
+        ratingCount: product.ratingCount,
+      })),
       pagination: {
         page,
-       
         totalPages: Math.ceil(totalProducts / limit),
         total: totalProducts,
         hasNextPage: page * limit < totalProducts,
@@ -763,6 +794,9 @@ exports.getTopRatedProducts = async (req, res, next) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+
+
 
 // Updated distributors to use user.vendors
 exports.distributors = async (req, res, next) => {
