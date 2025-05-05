@@ -29,7 +29,7 @@ router.get("/message", authenticateJWT, getUsers);
 router.post("/register", createUser);
 router.put('/updateUser/:id', updateUser);
 router.post("/login", loginUser);
-router.post("/createAddress", createAddress);
+router.post("/createAddress",authenticateJWT, createAddress);
 router.put("/updateAddress/:id", authenticateJWT, updateAddress);
 router.delete("/deleteAddress/:id", authenticateJWT, deleteAddress);
 router.get("/getAddress", authenticateJWT, getAddress);
