@@ -653,8 +653,10 @@ async function sendMessage(senderId, receiverId, messageText) {
 // Update FCM Token
 exports.updateFcm = async (req, res, next) => {
   const { fcmToken } = req.body;
+ console.log('updating token', req.user)
   try {
-    await User.findByIdAndUpdate(req.user._id, { fcmToken }, { new: true });
+    const x = await User.findByIdAndUpdate(req.user.id, { fcmToken : fcmToken }, { new: true });
+    console.log(x)
     return res.status(200).json({ message: 'Token Updated' });
   } catch (e) {
     console.error('Error in updating fcm token', e);

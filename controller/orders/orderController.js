@@ -322,10 +322,12 @@ exports.updateOrderStatus = async (req, res, next) => {
 }
 
 const createNotification = async(noti)=>{
+  console.log('creating notification')
   try{
    const newNoti = new Notification(noti);
    if(noti?.notification){
       const user = await User.findById(noti.userId)
+      console.log(user)
       const message = {
         token : user.fcmToken,
         data : {
