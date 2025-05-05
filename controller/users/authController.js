@@ -304,9 +304,10 @@ exports.createUser = async (req, res, next) => {
       state,
       city,
       distributionAreas: distributionAreas || [],
-      radius: userType === 'Vendor' ? radius : null,
+      radius: userType === 'Vendor' ? Number(radius) : null,
       vendors: [],
     };
+    console.log('user is', userData)
 
     const user = new User(userData);
 
