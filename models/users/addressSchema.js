@@ -9,17 +9,14 @@ const addressSchema = new mongoose.Schema({
     mobile : {
         type : Number,
     },
-    locality : {
-        type : String
+    address : {
+        type : String, 
     },
-    city : {
-        type : String
-    }, 
-    state : {
-        type : String
+    lng : {
+        type : Number, 
     },
-    zip : {
-        type : String
+    lat : {
+        type : Number, 
     },
     landMark : {
         type : String

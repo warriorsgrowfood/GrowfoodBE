@@ -105,34 +105,94 @@ exports.updateUserAddress = async (req, res, next) => {
 
 // Get products using user.vendors
 exports.getProducts = async (req, res, next) => {
-  
   try {
-    const { page = 1 } = req.params;
-    const skip = (page-1)*50;
-    if(req.user.vendors.length<=0){
-      return res.status(408).json({message : 'No any nearby vendors'})
-    }
+    const { page = 1, address } = req.body;
+    const skip = (page - 1) * 50;
     
+
+    let nearbyVendors = [];
+
+    
+    if ( address?.lat && address?.lng) {
+      nearbyVendors = await findNearbyVendors(address);
+
+      
+      await User.findByIdAndUpdate(req.user._id, { vendors: nearbyVendors });
+    }
+
+    if (!nearbyVendors || nearbyVendors.length === 0) {
+      return res.status(408).json({ message: 'No nearby vendors found' });
+    }
+
     const [total, products] = await Promise.all([
-      Product.countDocuments({ vendorId: { $in: req.user.vendors } }),
-      Product.find({ vendorId: { $in: req.user.vendors } })
+      Product.countDocuments({ vendorId: { $in: nearbyVendors } }),
+      Product.find({ vendorId: { $in: nearbyVendors } })
         .skip(skip)
         .limit(50)
-        .sort({ createdAt: -1 }) // optional: newest first
+        .sort({ createdAt: -1 })
     ]);
-   
+
     res.status(200).json({
       total,
       page: Number(page),
       totalPages: Math.ceil(total / 50),
       products,
     });
-   
+
   } catch (error) {
     console.error("Error in getProducts:", error);
     next(error);
   }
 };
+
+
+
+
+const findNearbyVendors = async (shopAddress) => {
+  try {
+    if (!shopAddress?.lat || !shopAddress?.lng) return [];
+
+    const allVendors = await User.find({ userType: 'Vendor' }).select('_id radius shopAddress.location');
+    
+    const userPoint = {
+      lat: shopAddress.lat,
+      lng: shopAddress.lng,
+    };
+
+    const getDistanceInKm = (lat1, lon1, lat2, lon2) => {
+      const R = 6371; 
+      const dLat = (lat2 - lat1) * (Math.PI / 180);
+      const dLon = (lon2 - lon1) * (Math.PI / 180);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) *
+          Math.cos(lat2 * (Math.PI / 180)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    const nearby = allVendors.filter((vendor) => {
+      const vLoc = vendor.shopAddress.location?.coordinates;
+      const vRadius = vendor.radius || 5; // default 5km
+      if (!vLoc || vLoc.length !== 2) return false;
+
+      const dist = getDistanceInKm(userPoint.lat, userPoint.lng, vLoc[1], vLoc[0]);
+      return dist <= vRadius;
+    });
+
+    return nearby.map(v => v._id);
+  } catch (err) {
+    console.error("Geo filter error:", err);
+    return [];
+  }
+};
+
+
+
+
+
 
 const getProductsGlobally = async (page, userId, limit, filterBy = null) => {
   try {
@@ -722,10 +782,10 @@ exports.getTopRatedProducts = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = 20;  // Limiting the result to 20 products
     const skip = (page - 1) * limit;
-    console.log("Vendors: ", req.user.vendors);
+   
 
     const vendorsObjectIds = req.user.vendors.map(id => id.toString()); // Ensure vendorsObjectIds are strings
-    console.log("Vendors Object IDs: ", vendorsObjectIds);
+    
 
     // Aggregation query to get top-rated products with all product details
     const aggregatedProducts = await Product.aggregate([
@@ -766,13 +826,13 @@ exports.getTopRatedProducts = async (req, res, next) => {
       { $skip: skip },
       { $limit: limit },
     ]);
-    console.log("Aggregated Products: ", aggregatedProducts);
+    
 
     // Count the total number of products matching the criteria
     const totalProducts = await Product.countDocuments({
       vendorId: { $in: vendorsObjectIds },
     });
-    console.log("Total Products: ", totalProducts);
+    
 
     // Send response
     res.status(200).json({

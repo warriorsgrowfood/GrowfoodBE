@@ -260,8 +260,7 @@ exports.createUser = async (req, res, next) => {
 
   try {
     // Validate required fields
-    if (!name || !email || !password || !mobile ) {
-
+    if (!name || !email || !password || !mobile) {
       return res.status(400).json({
         success: false,
         message: 'Name, email, password, mobile, and userType are required',
@@ -275,6 +274,18 @@ exports.createUser = async (req, res, next) => {
         success: false,
         message: 'Email already exists',
       });
+    }
+
+    // Add location to shopAddress if lat/lng present
+    if (
+      shopAddress &&
+      typeof shopAddress.lat === 'number' &&
+      typeof shopAddress.lng === 'number'
+    ) {
+      shopAddress.location = {
+        type: 'Point',
+        coordinates: [shopAddress.lng, shopAddress.lat], // Note: [lng, lat]
+      };
     }
 
     // Hash password
@@ -299,23 +310,27 @@ exports.createUser = async (req, res, next) => {
 
     const user = new User(userData);
 
-    // Handle user registration: Find nearby vendors
+
     if (userType !== 'Vendor' && shopAddress) {
       user.vendors = await findNearbyVendors(shopAddress);
     }
-   
 
-    // Save user
+  
     await user.save();
 
-    // Handle vendor registration: Update users within radius
-    if (userType === 'Vendor' && shopAddress && radius && !isNaN(radius)) {
+
+    if (
+      userType === 'Vendor' &&
+      shopAddress &&
+      radius &&
+      !isNaN(radius)
+    ) {
       await updateUsersForVendor(user._id, shopAddress, radius);
     }
 
     // Generate JWT token
     const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, {
-      expiresIn: '8760h',
+      expiresIn: '8760h', // 1 year
     });
 
     // Return response
@@ -342,6 +357,7 @@ exports.createUser = async (req, res, next) => {
     });
   }
 };
+
 
 // Update User
 exports.updateUser = async (req, res, next) => {
@@ -456,14 +472,13 @@ exports.createAddress = async (req, res, next) => {
     const address = formData;
 
     const newAddress = new Address({
-      userId: address.userId,
+      userId: req.user_Id,
       name: address.name,
       mobile: address.mobile,
-      locality: address.locality,
-      city: address.city,
-      state: address.state,
-      zip: address.zip,
+      address: address.address,
       landMark: address.landmark,
+      lat : address.lat,
+      lng : address.lng
     });
 
     await newAddress.save();

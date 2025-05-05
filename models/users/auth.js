@@ -6,20 +6,32 @@ const authSchema = new mongoose.Schema({
     type: String,
   },
   shopAddress: {
-    type: String,
+    type: {
+      formattedAddress: { type: String },
+      lat: Number,
+      lng: Number,
+      
+      // 🔥 Add location field inside shopAddress
+      location: {
+        type: {
+          type: String,
+          enum: ['Point'],
+          default: 'Point',
+        },
+        coordinates: {
+          type: [Number], // [lng, lat]
+        },
+      },
+    },
   },
-  gst: {
-    type: String,
-  },
+  gst: String,
   userType: {
     type: String,
-    enum: ['User', 'Vendor'], // Restrict to User or Vendor
+    enum: ['User', 'Vendor'],
     required: true,
-    default : 'User'
+    default: 'User',
   },
-  userStatus: {
-    type: String,
-  },
+  userStatus: String,
   name: {
     required: true,
     type: String,
@@ -29,9 +41,7 @@ const authSchema = new mongoose.Schema({
     type: String,
     unique: true,
   },
-  description: {
-    type: String,
-  },
+  description: String,
   password: {
     required: true,
     type: String,
@@ -40,32 +50,17 @@ const authSchema = new mongoose.Schema({
     required: true,
     type: String,
   },
-  image: {
-    type: String,
-  },
-  state: {
-    type: String,
-  },
-  city: {
-    type: String,
-  },
-  distributionAreas: {
-    type: [String],
-  },
-  fcmToken: {
-    type: String,
-  },
-  radius: {
-    type: Number,
-  },
+  image: String,
+  state: String,
+  city: String,
+  fcmToken: String,
+  radius: Number,
   chatters: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  vendors: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // New field for nearby vendors
+  vendors: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 });
 
-// Indexes for performance
-authSchema.index({ vendors: 1 });
-authSchema.index({ userType: 1, shopAddress: 1 });
+// ✅ Geo index (on shopAddress.location)
+authSchema.index({ 'shopAddress.location': '2dsphere' });
 
 const User = mongoose.model('User', authSchema);
-
 module.exports = User;
