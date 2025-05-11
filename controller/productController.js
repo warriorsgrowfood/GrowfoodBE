@@ -194,17 +194,13 @@ const findNearbyVendors = async (shopAddress) => {
 
 
 
-const getProductsGlobally = async (page, userId, limit, filterBy = null) => {
+const getProductsGlobally = async (page, user, limit, filterBy = null) => {
   try {
-    const user = await User.findById(userId).select("vendors");
-    if (!user) {
-      return {
-        status: 404,
-        response: { success: false, message: "User not found" },
-      };
-    }
+    page = Math.max(1, parseInt(page));
+    limit = Math.max(1, parseInt(limit));
 
-    const nearbyVendorIds = user.vendors || [];
+    const nearbyVendorIds = (user.vendors || []).map(v => v.toString());
+
     if (!nearbyVendorIds.length) {
       return {
         status: 200,
@@ -223,16 +219,25 @@ const getProductsGlobally = async (page, userId, limit, filterBy = null) => {
       };
     }
 
+    // FILTER
     let productFilter = { vendorId: { $in: nearbyVendorIds } };
+
     if (filterBy && typeof filterBy === "string") {
-      if (filterBy.startsWith("brand:")) {
-        productFilter.brand = filterBy.replace("brand:", "");
-      } else if (filterBy.startsWith("category:")) {
-        productFilter.categories = filterBy.replace("category:", "");
+      const lower = filterBy.toLowerCase();
+      if (lower.startsWith("brand:")) {
+        const brandName = filterBy.slice(6).trim();
+        productFilter.brand = { $regex: `^${brandName}$`, $options: "i" };
+      } else if (lower.startsWith("category:")) {
+        const categoryName = filterBy.slice(9).trim();
+        productFilter.categories = { $regex: `^${categoryName}$`, $options: "i" };
       }
     }
 
     const totalFilteredProducts = await Product.countDocuments(productFilter);
+    const totalPages = Math.ceil(totalFilteredProducts / limit);
+
+
+
     const paginatedProducts = await Product.find(productFilter)
       .skip((page - 1) * limit)
       .limit(limit);
@@ -246,13 +251,13 @@ const getProductsGlobally = async (page, userId, limit, filterBy = null) => {
           total: totalFilteredProducts,
           page,
           limit,
-          totalPages: Math.ceil(totalFilteredProducts / limit),
-          hasNextPage: page * limit < totalFilteredProducts,
+          totalPages,
+          hasNextPage: page < totalPages,
         },
       },
     };
   } catch (error) {
-    console.error("Error in getProductsGlobally:", error);
+    console.error("❌ Error in getProductsGlobally:", error);
     return {
       status: 500,
       response: {
@@ -263,6 +268,10 @@ const getProductsGlobally = async (page, userId, limit, filterBy = null) => {
     };
   }
 };
+
+
+
+
 
 exports.getProduct = async (req, res, next) => {
   const { id } = req.params;
@@ -658,21 +667,21 @@ exports.searchController = async (req, res, next) => {
 // Updated filterController to use user.vendors
 exports.filterController = async (req, res, next) => {
   const { type, value, page = 1 } = req.query;
-  const userId = req.user._id;
+ 
 
   try {
     let filteredResults;
 
     switch (type) {
       case "brand":
-        filteredResults = await getProductsGlobally(page, userId, 50, `brand:${value}`);
+        filteredResults = await getProductsGlobally(page, req.user, 50, `brand:${value}`);
         break;
       case "category":
-        filteredResults = await getProductsGlobally(page, userId, 50, `category:${value}`);
+        filteredResults = await getProductsGlobally(page, req.user, 50, `category:${value}`);
         break;
       case "distributor":
-        const user = await User.findById(userId).select("vendors");
-        if (!user || !user.vendors.includes(value)) {
+        
+        if (!req.user || !req.user.vendors.includes(value)) {
           return res.status(400).json({ success: false, message: "Invalid distributor" });
         }
         filteredResults = await Product.find({ vendorId: value });
