@@ -471,9 +471,9 @@ exports.createAddress = async (req, res, next) => {
   try {
     const formData = req.body;
     const address = formData;
-
+    console.log(req.user)
     const newAddress = new Address({
-      userId: req.user_Id,
+      userId: req.user.id ?? req.user._id,
       name: address.name,
       mobile: address.mobile,
       address: address.address,
@@ -481,6 +481,7 @@ exports.createAddress = async (req, res, next) => {
       lat : address.lat,
       lng : address.lng
     });
+    console.log(newAddress)
 
     await newAddress.save();
     res.status(200).json({ message: 'Address saved' });
@@ -493,14 +494,12 @@ exports.createAddress = async (req, res, next) => {
 // Get Address
 exports.getAddress = async (req, res, next) => {
   try {
-    const id= req.user._id;
+    const id= req.user.id;
     const addresses = await Address.find({ userId: id });
 
-    if (addresses.length) {
+    
       res.status(200).json(addresses);
-    } else {
-      res.status(404).json({ message: 'Address not found' });
-    }
+    
   } catch (error) {
     console.error('getAddress error:', error);
     next(error);

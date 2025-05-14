@@ -334,8 +334,23 @@ const createNotification = async(noti)=>{
           title : noti.title, 
           text : noti.text,
         }
+
       }
-      const res = await admin.messaging().send(message); 
+      const res = await admin.messaging().send({
+         token : user.fcmToken,
+        data : {
+          title : noti.title, 
+          text : noti.text,
+        },
+        android : {
+          priority : 'high',
+        },
+        apns: {
+    headers: {
+      'apns-priority': '10',
+    },
+  },
+      }); 
       console.log('fcm message sent to', noti.userId)
    }
    await newNoti.save();
