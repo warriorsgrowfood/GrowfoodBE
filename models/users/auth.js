@@ -27,7 +27,7 @@ const authSchema = new mongoose.Schema({
   gst: String,
   userType: {
     type: String,
-    enum: ['User', 'Vendor'],
+    enum: ['Restaurant', 'User', 'Vendor'],
     required: true,
     default: 'User',
   },
