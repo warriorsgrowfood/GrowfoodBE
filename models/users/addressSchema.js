@@ -9,6 +9,8 @@ const addressSchema = new mongoose.Schema({
     mobile : {
         type : Number,
     },
+    state : String, 
+    city : String,
     address : {
         type : String, 
     },
@@ -18,7 +20,7 @@ const addressSchema = new mongoose.Schema({
     lat : {
         type : Number, 
     },
-    landMark : {
+    pincode : {
         type : String
     }
 

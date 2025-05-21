@@ -476,8 +476,10 @@ exports.createAddress = async (req, res, next) => {
       userId: req.user.id ?? req.user._id,
       name: address.name,
       mobile: address.mobile,
+      state : address.state,
+      city: address.city,
       address: address.address,
-      landMark: address.landmark,
+      pincode : address.pincode,
       lat : address.lat,
       lng : address.lng
     });
