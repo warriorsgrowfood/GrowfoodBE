@@ -483,7 +483,7 @@ exports.createAddress = async (req, res, next) => {
       lat : address.lat,
       lng : address.lng
     });
-    console.log(newAddress)
+  
 
 
     await newAddress.save();
