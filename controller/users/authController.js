@@ -485,6 +485,7 @@ exports.createAddress = async (req, res, next) => {
     });
     console.log(newAddress)
 
+
     await newAddress.save();
     res.status(200).json({ message: 'Address saved' });
   } catch (err) {
