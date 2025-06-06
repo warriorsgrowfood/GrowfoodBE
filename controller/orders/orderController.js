@@ -16,7 +16,6 @@ exports.createOrder = async (req, res, next) => {
     });
     const bdata = req.body.formData; 
     const orders = ({...bdata, date : istDate, userId : req.user._id});
-    console.log('orders: ', orders);
 
     const newOrder = new Order(orders);
     await newOrder.save();
@@ -223,7 +222,6 @@ exports.vendorOrders = async (req, res, next) => {
     const limit = 50;
     const skip = (parseInt(page, 10) - 1) * limit;
 
-    console.log("Vendor ID:", id, "Page:", page);
 
     // Fetch orders that contain products linked to the given vendor
     const orders = await Order.find({ "productsArray.productId": { $exists: true } })
@@ -244,7 +242,10 @@ exports.vendorOrders = async (req, res, next) => {
     const productMap = new Map(products.map(product => [product._id.toString(), product]));
 
     // Construct vendor-specific orders response
-    const venOrders = orders.map(order => {
+    const venOrders = await Promise.all(orders.map(async order => {
+      // Fetch user details
+      const user = await Address.findById(order.addressId);
+      
       // Filter products belonging to the vendor
       const filteredProducts = order.productsArray
         .filter(product => productMap.has(product.productId))
@@ -264,13 +265,19 @@ exports.vendorOrders = async (req, res, next) => {
         });
 
       if (filteredProducts.length === 0) return null; // Skip orders without vendor's products
-
+      
       const venOrderAmount = filteredProducts.reduce((sum, product) => sum + product.totalPrice, 0);
       const orderQty = filteredProducts.reduce((sum, product) => sum + product.quantity, 0);
-
+      
       return {
         orderId: order._id,
         userId: order.userId,
+        user: user ? {
+          _id: user._id,
+          name: user.name,
+          address: user.address,
+          mobile: user.mobile
+        } : null,
         paymentId: order.paymentId,
         paymentMode: order.paymentMode,
         date: order.date,
@@ -280,10 +287,14 @@ exports.vendorOrders = async (req, res, next) => {
         productDetails: filteredProducts,
         addressId: order.addressId,
       };
-    }).filter(order => order !== null); // Remove null entries
+    }));
 
+
+    
+    const filteredVenOrders = venOrders.filter(order => order !== null);
+    
     // Count total orders for pagination
-    const totalOrders = await Order.countDocuments({ "productsArray.productId": { $exists: true } });
+    const totalOrders = filteredVenOrders.length;
     const totalPages = Math.ceil(totalOrders / limit);
 
     res.status(200).json({
@@ -291,7 +302,7 @@ exports.vendorOrders = async (req, res, next) => {
       totalPages,
       totalOrders,
       ordersPerPage: limit,
-      orders: venOrders,
+      orders: filteredVenOrders,
     });
   } catch (err) {
     console.error(err);
@@ -322,12 +333,10 @@ exports.updateOrderStatus = async (req, res, next) => {
 }
 
 const createNotification = async(noti)=>{
-  console.log('creating notification')
   try{
    const newNoti = new Notification(noti);
    if(noti?.notification){
       const user = await User.findById(noti.userId)
-      console.log(user)
       const message = {
         token : user.fcmToken,
         data : {
@@ -351,7 +360,6 @@ const createNotification = async(noti)=>{
     },
   },
       }); 
-      console.log('fcm message sent to', noti.userId)
    }
    await newNoti.save();
    return true;

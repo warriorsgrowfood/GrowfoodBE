@@ -330,7 +330,7 @@ exports.createUser = async (req, res, next) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, {
+    const token = jwt.sign({ id: user._id, email: user.email, name : user.name, address : user.shopAddress, shopName : user.shopName}, SECRET_KEY, {
       expiresIn: '8760h', // 1 year
     });
 
@@ -404,7 +404,7 @@ exports.loginUser = async (req, res, next) => {
       return res.status(401).send({message : 'User ID or Password is incoreect'});
     }
 
-    const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, { expiresIn: '8760h' });
+    const token = jwt.sign({ id: user._id, email: user.email, name : user.name, address : user.shopAddress, shopName : user.shopName}, SECRET_KEY, { expiresIn: '8760h' });
 
     res.status(200).json({ token, user });
   } catch (error) {
