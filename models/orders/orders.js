@@ -1,57 +1,97 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-    
-    userId : {
-        type : String,
-        required : true
+  orderId: {
+    type: String,
+    unique: true,
+    required: true,
+  },
+  userId: {
+    type: String,
+    required: true,
+  },
+  paymentId: {
+    type: String,
+    default: 'na',
+  },
+  paymentMode: {
+    type: String,
+    required: true,
+    enum: ['Cash', 'Online'],
+  },
+  addressId: {
+    type: String,
+    required: true,
+  },
+  billAmount: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  taxAmount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  productsArray: [{
+    productId: {
+      type: String,
+      required: true,
     },
-    
-    paymentId : {
-        type : String,
+    variantId: {
+      type: String,
+      required: true,
     },
-    paymentMode : {
-        type : String,
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
     },
-
-    addressId : {
-        type : String,
-        required : true
+    unitPrice: {
+      type: Number,
+      required: true,
+      min: 0,
     },
-    billAmount : {
-        type : Number,
-        required : true
+    totalPrice: {
+      type: Number,
+      required: true,
+      min: 0,
     },
-    productsArray : [{
-        productId : {
-            type : String,
-        },
-        
-        quantity : {
-            type : Number,
-        },
-        totalPrice : {
-            type : Number,
-        },
-        image : {
-            type : String,
-        },
-        vendorId : {
-            type : String,
-        }
-    }],
-    
-    date : {
-        type : Date,
-    }, 
-    
-    status : {
-        type : String,
-        default : 'processing'
+    images: [String],
+    vendorId: {
+      type: String,
+      required: true,
     },
-    
-    
-
+    gst: {
+      type: String,
+    },
+    gstInclusive: {
+      type: Boolean,
+      default: true,
+    },
+  }],
+  status: {
+    type: String,
+    required: true,
+    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+    default: 'pending',
+  },
+  statusHistory: [{
+    status: {
+      type: String,
+      enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+      required: true,
+    },
+    date: {
+      type: Date,
+      default: Date.now,
+    },
+    note: String,
+  }],
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
 module.exports = mongoose.model('Order', orderSchema);
