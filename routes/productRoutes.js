@@ -28,7 +28,7 @@ const {
 
 
 // ---------------Products Routes --------------------
-router.post("/getAllProducts", getProducts);
+router.get("/getAllProducts", getProducts);
 router.get("/product/:id", getProduct);
 router.put("/updateProduct", updateProduct);
 router.delete("/deleteProduct/:id", deleteProduct);
